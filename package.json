@@ -1,7 +1,7 @@
 {
-  "name": "srm",
+  "name": "rms",
   "version": "1.0.0",
-  "description": "SRM Application",
+  "description": "RMS Application",
   "private": true,
   "scripts": {
     "dev": "next dev",

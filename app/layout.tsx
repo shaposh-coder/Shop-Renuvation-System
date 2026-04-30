@@ -6,8 +6,8 @@ import Sidebar from '@/components/Sidebar'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'SRM',
-  description: 'SRM Application',
+  title: 'RMS',
+  description: 'RMS Application',
 }
 
 export default function RootLayout({

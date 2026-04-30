@@ -18,7 +18,10 @@ const menuItems = [
     name: 'Settings',
     path: '/settings',
     icon: Settings,
-    subItems: [{ name: 'Categories', path: '/settings/categories' }],
+    subItems: [
+      { name: 'Categories', path: '/settings/categories' },
+      { name: 'Location', path: '/settings/location' },
+    ],
   },
 ]
 
@@ -26,6 +29,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false)
+  const [hoveredMenuPath, setHoveredMenuPath] = useState<string | null>(null)
 
   const isActivePath = (path: string) =>
     pathname === path || pathname.startsWith(path + '/')
@@ -50,7 +54,7 @@ export default function Sidebar() {
                 : 'text-lg'
           }`}
         >
-          SRM
+          RMS
         </h1>
         {isDesktop && !isDesktopCollapsed && (
           <button
@@ -70,7 +74,20 @@ export default function Sidebar() {
           const isActive = isActivePath(item.path)
 
           return (
-            <div key={item.path}>
+            <div
+              key={item.path}
+              className="relative"
+              onMouseEnter={() => {
+                if (isDesktop && isDesktopCollapsed && item.subItems?.length) {
+                  setHoveredMenuPath(item.path)
+                }
+              }}
+              onMouseLeave={() => {
+                if (isDesktop && isDesktopCollapsed) {
+                  setHoveredMenuPath((current) => (current === item.path ? null : current))
+                }
+              }}
+            >
               <Link
                 href={item.path}
                 onClick={closeMobileMenu}
@@ -107,6 +124,25 @@ export default function Sidebar() {
                   })}
                 </div>
               ) : null}
+
+              {isDesktop && isDesktopCollapsed && item.subItems?.length && hoveredMenuPath === item.path ? (
+                <div className="absolute left-full top-0 z-50 ml-2 min-w-[170px] rounded-md border bg-white py-2 shadow-lg">
+                  {item.subItems.map((subItem) => {
+                    const isSubActive = isActivePath(subItem.path)
+                    return (
+                      <Link
+                        key={subItem.path}
+                        href={subItem.path}
+                        className={`block px-4 py-2 text-sm text-gray-700 hover:bg-primary-50 hover:text-primary-600 ${
+                          isSubActive ? 'text-primary-600 font-medium' : ''
+                        }`}
+                      >
+                        {subItem.name}
+                      </Link>
+                    )
+                  })}
+                </div>
+              ) : null}
             </div>
           )
         })}
@@ -117,7 +153,7 @@ export default function Sidebar() {
   return (
     <>
       <div className="sticky top-0 z-30 flex items-center justify-between border-b bg-white px-4 py-3 md:hidden">
-        <h1 className="text-lg font-bold text-primary-600">SRM</h1>
+        <h1 className="text-lg font-bold text-primary-600">RMS</h1>
         <button
           type="button"
           onClick={() => setIsMobileOpen((prev) => !prev)}
