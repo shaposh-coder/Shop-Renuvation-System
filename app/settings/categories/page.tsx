@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { MoreVertical } from 'lucide-react'
 
@@ -24,6 +24,8 @@ export default function SettingsCategoriesPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
+  const [showValidation, setShowValidation] = useState(false)
+  const hasFetchedOnceRef = useRef(false)
 
   const fetchCategories = async () => {
     setIsLoading(true)
@@ -45,6 +47,8 @@ export default function SettingsCategoriesPage() {
   }
 
   useEffect(() => {
+    if (hasFetchedOnceRef.current) return
+    hasFetchedOnceRef.current = true
     fetchCategories()
   }, [])
 
@@ -55,6 +59,7 @@ export default function SettingsCategoriesPage() {
     const trimmedDescription = description.trim()
 
     if (!trimmedName) {
+      setShowValidation(true)
       return
     }
 
@@ -62,33 +67,47 @@ export default function SettingsCategoriesPage() {
     setErrorMessage(null)
 
     if (editingCategoryId !== null) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('categories')
         .update({ name: trimmedName, description: trimmedDescription || null })
         .eq('id', editingCategoryId)
+        .select('id, name, description')
+        .single()
 
       if (error) {
-        setErrorMessage(error.message)
+        setErrorMessage(
+          error.code === '23505' ? 'Category title already exists. Please use a different title.' : error.message
+        )
         setIsSaving(false)
         return
       }
+
+      setCategories((prev) =>
+        prev.map((category) => (category.id === editingCategoryId ? data : category))
+      )
     } else {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('categories')
         .insert({ name: trimmedName, description: trimmedDescription || null })
+        .select('id, name, description')
+        .single()
 
       if (error) {
-        setErrorMessage(error.message)
+        setErrorMessage(
+          error.code === '23505' ? 'Category title already exists. Please use a different title.' : error.message
+        )
         setIsSaving(false)
         return
       }
+
+      setCategories((prev) => [data, ...prev])
     }
 
-    await fetchCategories()
     setName('')
     setDescription('')
     setEditingCategoryId(null)
     setIsModalOpen(false)
+    setShowValidation(false)
     setIsSaving(false)
   }
 
@@ -96,6 +115,7 @@ export default function SettingsCategoriesPage() {
     setEditingCategoryId(null)
     setName('')
     setDescription('')
+    setShowValidation(false)
     setIsModalOpen(true)
   }
 
@@ -104,6 +124,7 @@ export default function SettingsCategoriesPage() {
     setEditingCategoryId(category.id)
     setName(category.name)
     setDescription(category.description ?? '')
+    setShowValidation(false)
     setIsModalOpen(true)
   }
 
@@ -125,6 +146,7 @@ export default function SettingsCategoriesPage() {
     setEditingCategoryId(null)
     setName('')
     setDescription('')
+    setShowValidation(false)
   }
 
   const handleDeleteConfirm = async () => {
@@ -141,13 +163,14 @@ export default function SettingsCategoriesPage() {
       return
     }
 
-    await fetchCategories()
+    setCategories((prev) => prev.filter((category) => category.id !== deleteCategoryId))
     setDeleteCategoryId(null)
     setOpenActionMenuId(null)
     setIsDeleting(false)
   }
 
   const normalizedSearch = searchTerm.trim().toLowerCase()
+  const isNameInvalid = showValidation && name.trim().length === 0
   const filteredCategories =
     normalizedSearch.length === 0
       ? categories
@@ -350,8 +373,15 @@ export default function SettingsCategoriesPage() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Enter category name"
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-1 ${
+                    isNameInvalid
+                      ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  }`}
                 />
+                {isNameInvalid ? (
+                  <p className="mt-1 text-xs font-medium text-red-600">Title is required.</p>
+                ) : null}
               </div>
 
               <div>

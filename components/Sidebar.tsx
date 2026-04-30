@@ -1,19 +1,27 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  CircleDollarSign,
   LayoutDashboard,
   Menu,
+  Receipt,
   Settings,
+  ShieldCheck,
   X,
 } from 'lucide-react'
 
 const menuItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { name: 'Cash Records', path: '/cash-records', icon: CircleDollarSign },
+  { name: 'Expenses', path: '/expenses', icon: Receipt },
+  { name: 'Approvals', path: '/approvals', icon: ShieldCheck },
   {
     name: 'Settings',
     path: '/settings',
@@ -30,11 +38,23 @@ export default function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false)
   const [hoveredMenuPath, setHoveredMenuPath] = useState<string | null>(null)
+  const [expandedMenuPath, setExpandedMenuPath] = useState<string>('/settings')
 
   const isActivePath = (path: string) =>
     pathname === path || pathname.startsWith(path + '/')
 
   const closeMobileMenu = () => setIsMobileOpen(false)
+  const toggleSubmenu = (path: string) => {
+    setExpandedMenuPath((prev) => (prev === path ? '' : path))
+  }
+
+  useEffect(() => {
+    const matchedParent = menuItems.find((item) => {
+      if (!item.subItems?.length) return false
+      return pathname === item.path || pathname.startsWith(item.path + '/')
+    })
+    setExpandedMenuPath(matchedParent?.path ?? '')
+  }, [pathname])
 
   const renderSidebarContent = (isDesktop = false) => (
     <>
@@ -72,6 +92,8 @@ export default function Sidebar() {
         {menuItems.map((item) => {
           const Icon = item.icon
           const isActive = isActivePath(item.path)
+          const hasSubItems = Boolean(item.subItems?.length)
+          const isSubmenuExpanded = expandedMenuPath === item.path
 
           return (
             <div
@@ -88,9 +110,7 @@ export default function Sidebar() {
                 }
               }}
             >
-              <Link
-                href={item.path}
-                onClick={closeMobileMenu}
+              <div
                 className={`flex items-center py-3 text-gray-700 hover:bg-primary-50 hover:text-primary-600 transition-colors ${
                   isDesktop && isDesktopCollapsed ? 'justify-center px-3' : 'px-6'
                 } ${
@@ -99,13 +119,36 @@ export default function Sidebar() {
                     : ''
                 }`}
               >
-                <Icon className={isDesktop && isDesktopCollapsed ? 'h-5 w-5' : 'h-5 w-5 mr-3'} />
-                {(!isDesktop || !isDesktopCollapsed) && (
-                  <span className="font-medium">{item.name}</span>
-                )}
-              </Link>
+                <Link
+                  href={item.path}
+                  onClick={() => {
+                    closeMobileMenu()
+                    setExpandedMenuPath(hasSubItems ? item.path : '')
+                  }}
+                  className="flex min-w-0 flex-1 items-center"
+                >
+                  <Icon className={isDesktop && isDesktopCollapsed ? 'h-5 w-5' : 'h-5 w-5 mr-3'} />
+                  {(!isDesktop || !isDesktopCollapsed) && (
+                    <span className="font-medium">{item.name}</span>
+                  )}
+                </Link>
+                {hasSubItems && !isDesktopCollapsed ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleSubmenu(item.path)}
+                    className="rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    aria-label={`${isSubmenuExpanded ? 'Hide' : 'Show'} ${item.name} submenu`}
+                  >
+                    {isSubmenuExpanded ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
+                ) : null}
+              </div>
 
-              {!isDesktopCollapsed && item.subItems?.length ? (
+              {!isDesktopCollapsed && hasSubItems && isSubmenuExpanded ? (
                 <div className="bg-gray-50 py-1">
                   {item.subItems.map((subItem) => {
                     const isSubActive = isActivePath(subItem.path)

@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { MoreVertical } from 'lucide-react'
 
@@ -24,6 +24,8 @@ export default function SettingsLocationPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null)
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null)
+  const [showValidation, setShowValidation] = useState(false)
+  const hasFetchedOnceRef = useRef(false)
 
   const fetchLocations = async () => {
     setIsLoading(true)
@@ -45,6 +47,8 @@ export default function SettingsLocationPage() {
   }
 
   useEffect(() => {
+    if (hasFetchedOnceRef.current) return
+    hasFetchedOnceRef.current = true
     fetchLocations()
   }, [])
 
@@ -55,6 +59,7 @@ export default function SettingsLocationPage() {
     const trimmedAddress = address.trim()
 
     if (!trimmedShopName || !trimmedAddress) {
+      setShowValidation(true)
       return
     }
 
@@ -62,33 +67,47 @@ export default function SettingsLocationPage() {
     setErrorMessage(null)
 
     if (editingLocationId !== null) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('locations')
         .update({ shop_name: trimmedShopName, address: trimmedAddress })
         .eq('id', editingLocationId)
+        .select('id, shop_name, address')
+        .single()
 
       if (error) {
-        setErrorMessage(error.message)
+        setErrorMessage(
+          error.code === '23505' ? 'Shop Name already exists. Please use a different name.' : error.message
+        )
         setIsSaving(false)
         return
       }
+
+      setLocations((prev) =>
+        prev.map((location) => (location.id === editingLocationId ? data : location))
+      )
     } else {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('locations')
         .insert({ shop_name: trimmedShopName, address: trimmedAddress })
+        .select('id, shop_name, address')
+        .single()
 
       if (error) {
-        setErrorMessage(error.message)
+        setErrorMessage(
+          error.code === '23505' ? 'Shop Name already exists. Please use a different name.' : error.message
+        )
         setIsSaving(false)
         return
       }
+
+      setLocations((prev) => [data, ...prev])
     }
 
-    await fetchLocations()
     setShopName('')
     setAddress('')
     setEditingLocationId(null)
     setIsModalOpen(false)
+    setShowValidation(false)
     setIsSaving(false)
   }
 
@@ -96,6 +115,7 @@ export default function SettingsLocationPage() {
     setEditingLocationId(null)
     setShopName('')
     setAddress('')
+    setShowValidation(false)
     setIsModalOpen(true)
   }
 
@@ -104,6 +124,7 @@ export default function SettingsLocationPage() {
     setEditingLocationId(location.id)
     setShopName(location.shop_name)
     setAddress(location.address)
+    setShowValidation(false)
     setIsModalOpen(true)
   }
 
@@ -125,6 +146,7 @@ export default function SettingsLocationPage() {
     setEditingLocationId(null)
     setShopName('')
     setAddress('')
+    setShowValidation(false)
   }
 
   const handleDeleteConfirm = async () => {
@@ -141,13 +163,15 @@ export default function SettingsLocationPage() {
       return
     }
 
-    await fetchLocations()
+    setLocations((prev) => prev.filter((location) => location.id !== deleteLocationId))
     setDeleteLocationId(null)
     setOpenActionMenuId(null)
     setIsDeleting(false)
   }
 
   const normalizedSearch = searchTerm.trim().toLowerCase()
+  const isShopNameInvalid = showValidation && shopName.trim().length === 0
+  const isAddressInvalid = showValidation && address.trim().length === 0
   const filteredLocations =
     normalizedSearch.length === 0
       ? locations
@@ -350,8 +374,15 @@ export default function SettingsLocationPage() {
                   value={shopName}
                   onChange={(event) => setShopName(event.target.value)}
                   placeholder="Enter shop name"
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-1 ${
+                    isShopNameInvalid
+                      ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  }`}
                 />
+                {isShopNameInvalid ? (
+                  <p className="mt-1 text-xs font-medium text-red-600">Shop Name is required.</p>
+                ) : null}
               </div>
 
               <div>
@@ -364,8 +395,15 @@ export default function SettingsLocationPage() {
                   onChange={(event) => setAddress(event.target.value)}
                   placeholder="Enter shop address"
                   rows={4}
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-1 ${
+                    isAddressInvalid
+                      ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  }`}
                 />
+                {isAddressInvalid ? (
+                  <p className="mt-1 text-xs font-medium text-red-600">Address is required.</p>
+                ) : null}
               </div>
 
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
