@@ -31,22 +31,34 @@ export default function SettingsLocationPage() {
     setIsLoading(true)
     setErrorMessage(null)
 
-    const roleCookie = document.cookie
-      .split('; ')
-      .find((entry) => entry.startsWith('rms_user_role='))
     const emailCookie = document.cookie
       .split('; ')
       .find((entry) => entry.startsWith('rms_user_email='))
 
-    const currentRole = roleCookie
-      ? decodeURIComponent(roleCookie.split('=')[1] ?? '')
-      : (localStorage.getItem('rms_user_role') ?? '')
     const currentEmail = emailCookie
       ? decodeURIComponent(emailCookie.split('=')[1] ?? '')
       : (localStorage.getItem('rms_user_email') ?? '')
 
+    if (!currentEmail) {
+      setLocations([])
+      setIsLoading(false)
+      return
+    }
+
+    const { data: currentUser, error: currentUserError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('user_email', currentEmail)
+      .single()
+
+    if (currentUserError || !currentUser) {
+      setErrorMessage(currentUserError?.message ?? 'User not found.')
+      setIsLoading(false)
+      return
+    }
+
     // Admin can see all locations.
-    if (currentRole === 'Admin') {
+    if (currentUser.role === 'Admin') {
       const { data, error } = await supabase
         .from('locations')
         .select('id, shop_name, address')
@@ -59,24 +71,6 @@ export default function SettingsLocationPage() {
       }
 
       setLocations(data ?? [])
-      setIsLoading(false)
-      return
-    }
-
-    if (!currentEmail) {
-      setLocations([])
-      setIsLoading(false)
-      return
-    }
-
-    const { data: currentUser, error: currentUserError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('user_email', currentEmail)
-      .single()
-
-    if (currentUserError || !currentUser) {
-      setErrorMessage(currentUserError?.message ?? 'User not found.')
       setIsLoading(false)
       return
     }
