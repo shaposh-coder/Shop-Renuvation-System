@@ -61,6 +61,14 @@ export default function Sidebar() {
     closeMobileMenu()
     router.replace('/login')
   }
+  const handleBrandClick = () => {
+    closeMobileMenu()
+    if (pathname.startsWith('/dashboard')) {
+      router.refresh()
+      return
+    }
+    router.push('/dashboard')
+  }
 
   const visibleMenuItems = useMemo(
     () =>
@@ -103,7 +111,9 @@ export default function Sidebar() {
             : 'justify-between px-6 py-4'
         }`}
       >
-        <h1
+        <button
+          type="button"
+          onClick={handleBrandClick}
           className={`font-bold text-primary-600 ${
             isDesktop && isDesktopCollapsed
               ? 'text-[11px] tracking-wide'
@@ -111,9 +121,10 @@ export default function Sidebar() {
                 ? 'text-2xl'
                 : 'text-lg'
           }`}
+          aria-label="Go to dashboard"
         >
           RMS
-        </h1>
+        </button>
         {isDesktop && !isDesktopCollapsed && (
           <button
             type="button"
