@@ -23,6 +23,21 @@ interface LocationOption {
   shop_name: string
 }
 
+interface UserLocationMapping {
+  user_id: number
+  location_id: number
+  locations:
+    | {
+        id: number
+        shop_name: string
+      }
+    | {
+        id: number
+        shop_name: string
+      }[]
+    | null
+}
+
 export default function SettingsUsersPage() {
   const [userName, setUserName] = useState('')
   const [userEmail, setUserEmail] = useState('')
@@ -86,10 +101,17 @@ export default function SettingsUsersPage() {
 
     const mappedUsers = ((usersData as Omit<UserRecord, 'location_ids' | 'location_names'>[]) ?? []).map(
       (user) => {
-        const currentMappings = (mappingsData ?? []).filter((mapping) => mapping.user_id === user.id)
+        const currentMappings = ((mappingsData as UserLocationMapping[] | null) ?? []).filter(
+          (mapping) => mapping.user_id === user.id
+        )
         const locationIds = currentMappings.map((mapping) => mapping.location_id)
         const locationNames = currentMappings
-          .map((mapping) => (mapping.locations as { id: number; shop_name: string } | null)?.shop_name)
+          .map((mapping) => {
+            const locationRecord = Array.isArray(mapping.locations)
+              ? mapping.locations[0]
+              : mapping.locations
+            return locationRecord?.shop_name ?? null
+          })
           .filter((name): name is string => Boolean(name))
 
         return {

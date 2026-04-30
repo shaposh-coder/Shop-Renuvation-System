@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -62,15 +62,19 @@ export default function Sidebar() {
     router.replace('/login')
   }
 
-  const visibleMenuItems = menuItems.map((item) => {
-    if (item.path !== '/settings' || !item.subItems) return item
-    return {
-      ...item,
-      subItems: item.subItems.filter((subItem) =>
-        subItem.path === '/settings/users' ? isAdminUser : true
-      ),
-    }
-  })
+  const visibleMenuItems = useMemo(
+    () =>
+      menuItems.map((item) => {
+        if (item.path !== '/settings' || !item.subItems) return item
+        return {
+          ...item,
+          subItems: item.subItems.filter((subItem) =>
+            subItem.path === '/settings/users' ? isAdminUser : true
+          ),
+        }
+      }),
+    [isAdminUser]
+  )
 
   useEffect(() => {
     const roleCookie = document.cookie
@@ -88,7 +92,7 @@ export default function Sidebar() {
       return pathname === item.path || pathname.startsWith(item.path + '/')
     })
     setExpandedMenuPath(matchedParent?.path ?? '')
-  }, [pathname, isAdminUser])
+  }, [pathname, visibleMenuItems])
 
   const renderSidebarContent = (isDesktop = false) => (
     <div className="flex min-h-0 flex-1 flex-col">
