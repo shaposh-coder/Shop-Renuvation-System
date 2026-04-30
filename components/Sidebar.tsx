@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   ChevronDown,
   ChevronLeft,
@@ -10,6 +10,7 @@ import {
   ChevronUp,
   CircleDollarSign,
   LayoutDashboard,
+  LogOut,
   Menu,
   Receipt,
   Settings,
@@ -29,16 +30,19 @@ const menuItems = [
     subItems: [
       { name: 'Categories', path: '/settings/categories' },
       { name: 'Location', path: '/settings/location' },
+      { name: 'Users', path: '/settings/users' },
     ],
   },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false)
   const [hoveredMenuPath, setHoveredMenuPath] = useState<string | null>(null)
   const [expandedMenuPath, setExpandedMenuPath] = useState<string>('/settings')
+  const [isAdminUser, setIsAdminUser] = useState(false)
 
   const isActivePath = (path: string) =>
     pathname === path || pathname.startsWith(path + '/')
@@ -47,17 +51,47 @@ export default function Sidebar() {
   const toggleSubmenu = (path: string) => {
     setExpandedMenuPath((prev) => (prev === path ? '' : path))
   }
+  const handleSignOut = () => {
+    document.cookie = 'rms_session=; path=/; max-age=0; samesite=lax'
+    document.cookie = 'rms_user_email=; path=/; max-age=0; samesite=lax'
+    document.cookie = 'rms_user_role=; path=/; max-age=0; samesite=lax'
+    localStorage.removeItem('rms_session')
+    localStorage.removeItem('rms_user_email')
+    localStorage.removeItem('rms_user_role')
+    closeMobileMenu()
+    router.replace('/login')
+  }
+
+  const visibleMenuItems = menuItems.map((item) => {
+    if (item.path !== '/settings' || !item.subItems) return item
+    return {
+      ...item,
+      subItems: item.subItems.filter((subItem) =>
+        subItem.path === '/settings/users' ? isAdminUser : true
+      ),
+    }
+  })
 
   useEffect(() => {
-    const matchedParent = menuItems.find((item) => {
+    const roleCookie = document.cookie
+      .split('; ')
+      .find((entry) => entry.startsWith('rms_user_role='))
+    const roleValue = roleCookie
+      ? decodeURIComponent(roleCookie.split('=')[1] ?? '')
+      : (localStorage.getItem('rms_user_role') ?? '')
+    setIsAdminUser(roleValue === 'Admin')
+  }, [])
+
+  useEffect(() => {
+    const matchedParent = visibleMenuItems.find((item) => {
       if (!item.subItems?.length) return false
       return pathname === item.path || pathname.startsWith(item.path + '/')
     })
     setExpandedMenuPath(matchedParent?.path ?? '')
-  }, [pathname])
+  }, [pathname, isAdminUser])
 
   const renderSidebarContent = (isDesktop = false) => (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       <div
         className={`flex items-center ${
           isDesktop && isDesktopCollapsed
@@ -88,8 +122,8 @@ export default function Sidebar() {
         )}
       </div>
 
-      <nav className="mt-4 md:mt-6">
-        {menuItems.map((item) => {
+      <nav className="relative mt-4 flex-1 md:mt-6">
+        {visibleMenuItems.map((item) => {
           const Icon = item.icon
           const isActive = isActivePath(item.path)
           const hasSubItems = Boolean(item.subItems?.length)
@@ -150,7 +184,7 @@ export default function Sidebar() {
 
               {!isDesktopCollapsed && hasSubItems && isSubmenuExpanded ? (
                 <div className="bg-gray-50 py-1">
-                  {item.subItems.map((subItem) => {
+                  {item.subItems?.map((subItem) => {
                     const isSubActive = isActivePath(subItem.path)
                     return (
                       <Link
@@ -169,8 +203,8 @@ export default function Sidebar() {
               ) : null}
 
               {isDesktop && isDesktopCollapsed && item.subItems?.length && hoveredMenuPath === item.path ? (
-                <div className="absolute left-full top-0 z-50 ml-2 min-w-[170px] rounded-md border bg-white py-2 shadow-lg">
-                  {item.subItems.map((subItem) => {
+                <div className="absolute left-full top-0 z-50 ml-2 min-w-[170px] whitespace-nowrap rounded-md border bg-white py-2 shadow-lg">
+                  {item.subItems?.map((subItem) => {
                     const isSubActive = isActivePath(subItem.path)
                     return (
                       <Link
@@ -190,7 +224,29 @@ export default function Sidebar() {
           )
         })}
       </nav>
-    </>
+
+      <div className="mt-auto border-t p-3">
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className={`w-full rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 ${
+            isDesktop && isDesktopCollapsed ? 'px-2' : ''
+          }`}
+          aria-label="Sign out"
+        >
+          {isDesktop && isDesktopCollapsed ? (
+            <span className="flex items-center justify-center">
+              <LogOut className="h-4 w-4" />
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              <LogOut className="h-4 w-4" />
+              <span>Sign out</span>
+            </span>
+          )}
+        </button>
+      </div>
+    </div>
   )
 
   return (
@@ -235,7 +291,7 @@ export default function Sidebar() {
       <aside
         className={`hidden bg-white shadow-lg transition-all duration-200 md:block ${
           isDesktopCollapsed ? 'w-20' : 'w-64'
-        }`}
+        } md:flex md:h-screen md:flex-col md:overflow-visible`}
       >
         {isDesktopCollapsed ? (
           <div className="flex justify-center px-2 pt-2">

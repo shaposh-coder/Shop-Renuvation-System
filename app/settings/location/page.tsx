@@ -31,9 +31,79 @@ export default function SettingsLocationPage() {
     setIsLoading(true)
     setErrorMessage(null)
 
+    const roleCookie = document.cookie
+      .split('; ')
+      .find((entry) => entry.startsWith('rms_user_role='))
+    const emailCookie = document.cookie
+      .split('; ')
+      .find((entry) => entry.startsWith('rms_user_email='))
+
+    const currentRole = roleCookie
+      ? decodeURIComponent(roleCookie.split('=')[1] ?? '')
+      : (localStorage.getItem('rms_user_role') ?? '')
+    const currentEmail = emailCookie
+      ? decodeURIComponent(emailCookie.split('=')[1] ?? '')
+      : (localStorage.getItem('rms_user_email') ?? '')
+
+    // Admin can see all locations.
+    if (currentRole === 'Admin') {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, shop_name, address')
+        .order('id', { ascending: false })
+
+      if (error) {
+        setErrorMessage(error.message)
+        setIsLoading(false)
+        return
+      }
+
+      setLocations(data ?? [])
+      setIsLoading(false)
+      return
+    }
+
+    if (!currentEmail) {
+      setLocations([])
+      setIsLoading(false)
+      return
+    }
+
+    const { data: currentUser, error: currentUserError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('user_email', currentEmail)
+      .single()
+
+    if (currentUserError || !currentUser) {
+      setErrorMessage(currentUserError?.message ?? 'User not found.')
+      setIsLoading(false)
+      return
+    }
+
+    const { data: mappingRows, error: mappingError } = await supabase
+      .from('user_locations')
+      .select('location_id')
+      .eq('user_id', currentUser.id)
+
+    if (mappingError) {
+      setErrorMessage(mappingError.message)
+      setIsLoading(false)
+      return
+    }
+
+    const assignedLocationIds = (mappingRows ?? []).map((row) => row.location_id)
+
+    if (assignedLocationIds.length === 0) {
+      setLocations([])
+      setIsLoading(false)
+      return
+    }
+
     const { data, error } = await supabase
       .from('locations')
       .select('id, shop_name, address')
+      .in('id', assignedLocationIds)
       .order('id', { ascending: false })
 
     if (error) {
