@@ -20,6 +20,7 @@ interface CashRecordLocationRelation {
 interface CashRecord {
   id: number
   user_name: string
+  entry_date: string
   narration: string
   cash_value: number
   location_id: number
@@ -49,7 +50,10 @@ interface ActionMenuState {
 }
 
 export default function CashRecordsPage() {
+  const getTodayDateInputValue = () => new Date().toISOString().split('T')[0] ?? ''
+
   const [userName, setUserName] = useState('')
+  const [entryDate, setEntryDate] = useState(getTodayDateInputValue())
   const [narration, setNarration] = useState('')
   const [cashValue, setCashValue] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
@@ -201,7 +205,9 @@ export default function CashRecordsPage() {
 
     let query = supabase
       .from('cash_records')
-      .select('id, user_name, narration, cash_value, location_id, status, locations(id, shop_name)')
+      .select(
+        'id, user_name, entry_date, narration, cash_value, location_id, status, locations(id, shop_name)'
+      )
 
     if (currentUser.role !== 'Admin') {
       query = query.eq('user_name', currentUser.user_name)
@@ -246,6 +252,7 @@ export default function CashRecordsPage() {
 
   const resetForm = () => {
     setUserName(currentUserRole === 'Admin' ? '' : currentUserName)
+    setEntryDate(getTodayDateInputValue())
     setNarration('')
     setCashValue('')
     setLocationId('')
@@ -267,6 +274,7 @@ export default function CashRecordsPage() {
   const openEditModal = (record: CashRecord) => {
     setEditingRecordId(record.id)
     setUserName(record.user_name)
+    setEntryDate(record.entry_date ?? getTodayDateInputValue())
     setNarration(record.narration)
     setCashValue(record.cash_value.toString())
     setLocationId(record.location_id)
@@ -282,7 +290,15 @@ export default function CashRecordsPage() {
     const trimmedNarration = narration.trim()
     const numericCashValue = Number(cashValue)
 
-    if (!effectiveUserName || !trimmedNarration || !locationId || !cashValue || Number.isNaN(numericCashValue) || numericCashValue <= 0) {
+    if (
+      !effectiveUserName ||
+      !entryDate ||
+      !trimmedNarration ||
+      !locationId ||
+      !cashValue ||
+      Number.isNaN(numericCashValue) ||
+      numericCashValue <= 0
+    ) {
       setShowValidation(true)
       return
     }
@@ -308,12 +324,15 @@ export default function CashRecordsPage() {
         .from('cash_records')
         .update({
           user_name: effectiveUserName,
+          entry_date: entryDate,
           narration: trimmedNarration,
           cash_value: numericCashValue,
           location_id: locationId,
         })
         .eq('id', editingRecordId)
-        .select('id, user_name, narration, cash_value, location_id, status, locations(id, shop_name)')
+        .select(
+          'id, user_name, entry_date, narration, cash_value, location_id, status, locations(id, shop_name)'
+        )
         .single()
 
       if (error) {
@@ -328,12 +347,15 @@ export default function CashRecordsPage() {
         .from('cash_records')
         .insert({
           user_name: effectiveUserName,
+          entry_date: entryDate,
           narration: trimmedNarration,
           cash_value: numericCashValue,
           location_id: locationId,
           status: 'Pending',
         })
-        .select('id, user_name, narration, cash_value, location_id, status, locations(id, shop_name)')
+        .select(
+          'id, user_name, entry_date, narration, cash_value, location_id, status, locations(id, shop_name)'
+        )
         .single()
 
       if (error) {
@@ -399,7 +421,9 @@ export default function CashRecordsPage() {
       .from('cash_records')
       .update({ status: 'Approved' })
       .eq('id', approveRecordId)
-      .select('id, user_name, narration, cash_value, location_id, status, locations(id, shop_name)')
+      .select(
+        'id, user_name, entry_date, narration, cash_value, location_id, status, locations(id, shop_name)'
+      )
       .single()
 
     if (error) {
@@ -426,8 +450,15 @@ export default function CashRecordsPage() {
   }
 
   const formatCurrency = (value: number) => `Rs. ${value.toLocaleString('en-PK')}`
+  const formatEntryDate = (value: string) =>
+    new Date(value).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
 
   const isUserNameInvalid = showValidation && userName.trim().length === 0
+  const isEntryDateInvalid = showValidation && entryDate.trim().length === 0
   const isNarrationInvalid = showValidation && narration.trim().length === 0
   const isCashValueInvalid =
     showValidation && (!cashValue || Number.isNaN(Number(cashValue)) || Number(cashValue) <= 0)
@@ -454,6 +485,7 @@ export default function CashRecordsPage() {
   const selectedViewRecord = viewRecordId
     ? records.find((record) => record.id === viewRecordId) ?? null
     : null
+  const showUserColumn = currentUserRole === 'Admin'
 
   return (
     <div className="p-4 md:p-8">
@@ -601,7 +633,10 @@ export default function CashRecordsPage() {
           <table className="min-w-full">
             <thead className="bg-gradient-to-r from-blue-600 to-indigo-600">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">User Name</th>
+                {showUserColumn ? (
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">User Name</th>
+                ) : null}
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Entry Date</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Narration</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Value</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Location</th>
@@ -612,20 +647,23 @@ export default function CashRecordsPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={showUserColumn ? 7 : 6} className="px-4 py-6 text-center text-sm text-gray-500">
                     Loading cash records...
                   </td>
                 </tr>
               ) : filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={showUserColumn ? 7 : 6} className="px-4 py-6 text-center text-sm text-gray-500">
                     No cash records found.
                   </td>
                 </tr>
               ) : (
                 filteredRecords.map((record) => (
                   <tr key={record.id} className="border-t">
-                    <td className="px-4 py-3 text-sm text-gray-700">{record.user_name}</td>
+                    {showUserColumn ? (
+                      <td className="px-4 py-3 text-sm text-gray-700">{record.user_name}</td>
+                    ) : null}
+                    <td className="px-4 py-3 text-sm text-gray-700">{formatEntryDate(record.entry_date)}</td>
                     <td className="px-4 py-3 text-sm text-gray-700" title={record.narration}>
                       <span className="block max-w-[260px] truncate whitespace-nowrap lg:max-w-[340px]">
                         {getShortNarration(record.narration)}
@@ -985,6 +1023,26 @@ export default function CashRecordsPage() {
                 )}
                 {isUserNameInvalid ? (
                   <p className="mt-1 text-xs font-medium text-red-600">User Name is required.</p>
+                ) : null}
+              </div>
+
+              <div>
+                <label htmlFor="cash-entry-date" className="mb-1 block text-sm font-medium text-gray-700">
+                  Entry Date
+                </label>
+                <input
+                  id="cash-entry-date"
+                  type="date"
+                  value={entryDate}
+                  onChange={(event) => setEntryDate(event.target.value)}
+                  className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-1 ${
+                    isEntryDateInvalid
+                      ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  }`}
+                />
+                {isEntryDateInvalid ? (
+                  <p className="mt-1 text-xs font-medium text-red-600">Entry Date is required.</p>
                 ) : null}
               </div>
 

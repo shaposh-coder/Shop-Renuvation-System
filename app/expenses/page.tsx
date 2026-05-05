@@ -30,6 +30,7 @@ interface ExpenseCategoryRelation {
 interface ExpenseRecord {
   id: number
   user_name: string
+  entry_date: string
   narration: string
   expense_value: number
   location_id: number
@@ -61,7 +62,9 @@ interface ActionMenuState {
 }
 
 export default function ExpensesPage() {
+  const getTodayDateInputValue = () => new Date().toISOString().split('T')[0] ?? ''
   const [userName, setUserName] = useState('')
+  const [entryDate, setEntryDate] = useState(getTodayDateInputValue())
   const [narration, setNarration] = useState('')
   const [expenseValue, setExpenseValue] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
@@ -230,7 +233,7 @@ export default function ExpensesPage() {
     let query = supabase
       .from('expenses')
       .select(
-        'id, user_name, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
+        'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
       )
 
     if (currentUser.role !== 'Admin') {
@@ -291,6 +294,7 @@ export default function ExpensesPage() {
 
   const resetForm = () => {
     setUserName(currentUserRole === 'Admin' ? '' : currentUserName)
+    setEntryDate(getTodayDateInputValue())
     setNarration('')
     setExpenseValue('')
     setLocationId('')
@@ -315,6 +319,7 @@ export default function ExpensesPage() {
   const openEditModal = (record: ExpenseRecord) => {
     setEditingRecordId(record.id)
     setUserName(record.user_name)
+    setEntryDate(record.entry_date ?? getTodayDateInputValue())
     setNarration(record.narration)
     setExpenseValue(record.expense_value.toString())
     setLocationId(record.location_id)
@@ -335,6 +340,7 @@ export default function ExpensesPage() {
 
     if (
       !effectiveUserName ||
+      !entryDate ||
       !trimmedNarration ||
       !locationId ||
       !categoryId ||
@@ -367,6 +373,7 @@ export default function ExpensesPage() {
         .from('expenses')
         .update({
           user_name: effectiveUserName,
+          entry_date: entryDate,
           narration: trimmedNarration,
           expense_value: numericExpenseValue,
           location_id: locationId,
@@ -374,7 +381,7 @@ export default function ExpensesPage() {
         })
         .eq('id', editingRecordId)
         .select(
-          'id, user_name, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
+          'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
         )
         .single()
 
@@ -390,6 +397,7 @@ export default function ExpensesPage() {
         .from('expenses')
         .insert({
           user_name: effectiveUserName,
+          entry_date: entryDate,
           narration: trimmedNarration,
           expense_value: numericExpenseValue,
           location_id: locationId,
@@ -397,7 +405,7 @@ export default function ExpensesPage() {
           status: 'Pending',
         })
         .select(
-          'id, user_name, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
+          'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
         )
         .single()
 
@@ -465,7 +473,7 @@ export default function ExpensesPage() {
       .update({ status: 'Approved' })
       .eq('id', approveRecordId)
       .select(
-        'id, user_name, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
+        'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
       )
       .single()
 
@@ -498,8 +506,15 @@ export default function ExpensesPage() {
   }
 
   const formatCurrency = (value: number) => `Rs. ${value.toLocaleString('en-PK')}`
+  const formatEntryDate = (value: string) =>
+    new Date(value).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
 
   const isUserNameInvalid = showValidation && userName.trim().length === 0
+  const isEntryDateInvalid = showValidation && entryDate.trim().length === 0
   const isNarrationInvalid = showValidation && narration.trim().length === 0
   const isExpenseValueInvalid =
     showValidation && (!expenseValue || Number.isNaN(Number(expenseValue)) || Number(expenseValue) <= 0)
@@ -712,6 +727,7 @@ export default function ExpensesPage() {
             <thead className="bg-gradient-to-r from-blue-600 to-indigo-600">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">User Name</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Entry Date</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Narration</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Value</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Location</th>
@@ -723,13 +739,13 @@ export default function ExpensesPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-gray-500">
                     Loading expenses...
                   </td>
                 </tr>
               ) : filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-gray-500">
                     No expenses found.
                   </td>
                 </tr>
@@ -737,6 +753,7 @@ export default function ExpensesPage() {
                 filteredRecords.map((record) => (
                   <tr key={record.id} className="border-t">
                     <td className="px-4 py-3 text-sm text-gray-700">{record.user_name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{formatEntryDate(record.entry_date)}</td>
                     <td className="px-4 py-3 text-sm text-gray-700" title={record.narration}>
                       <span className="block max-w-[220px] truncate whitespace-nowrap lg:max-w-[300px]">
                         {getShortNarration(record.narration)}
@@ -837,6 +854,7 @@ export default function ExpensesPage() {
                       {record.status}
                     </span>
                   </div>
+                  <p className="text-xs text-gray-500">{formatEntryDate(record.entry_date)}</p>
                   <p className="truncate whitespace-nowrap text-sm text-gray-700">
                     {getShortNarration(record.narration)}
                   </p>
@@ -1095,6 +1113,26 @@ export default function ExpensesPage() {
               </div>
 
               <div>
+                <label htmlFor="expense-entry-date" className="mb-1 block text-sm font-medium text-gray-700">
+                  Entry Date
+                </label>
+                <input
+                  id="expense-entry-date"
+                  type="date"
+                  value={entryDate}
+                  onChange={(event) => setEntryDate(event.target.value)}
+                  className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-1 ${
+                    isEntryDateInvalid
+                      ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  }`}
+                />
+                {isEntryDateInvalid ? (
+                  <p className="mt-1 text-xs font-medium text-red-600">Entry Date is required.</p>
+                ) : null}
+              </div>
+
+              <div>
                 <label htmlFor="expense-narration" className="mb-1 block text-sm font-medium text-gray-700">
                   Narration
                 </label>
@@ -1329,6 +1367,10 @@ export default function ExpensesPage() {
                 <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
                   {selectedViewRecord.narration}
                 </p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Entry Date</p>
+                <p className="mt-1 text-sm text-gray-800">{formatEntryDate(selectedViewRecord.entry_date)}</p>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Value</p>
