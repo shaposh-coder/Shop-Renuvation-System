@@ -60,6 +60,7 @@ export default function SettingsUsersPage() {
   const [locationSearchTerm, setLocationSearchTerm] = useState('')
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null)
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null)
+  const [locationsPopupUser, setLocationsPopupUser] = useState<UserRecord | null>(null)
   const hasFetchedOnceRef = useRef(false)
   const locationsDropdownRef = useRef<HTMLDivElement | null>(null)
 
@@ -392,15 +393,15 @@ export default function SettingsUsersPage() {
       <div className="hidden overflow-hidden rounded-lg bg-white shadow md:block">
         <div className="overflow-x-auto">
           <table className="min-w-full">
-            <thead className="bg-gray-100">
+            <thead className="bg-gradient-to-r from-blue-600 to-indigo-600">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">User Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">User Email</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Password</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Role</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Locations</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Action</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">User Name</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">User Email</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Password</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Role</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Locations</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -425,7 +426,13 @@ export default function SettingsUsersPage() {
                     <td className="px-4 py-3 text-sm text-gray-700">{user.status}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{user.role}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {user.location_names.length > 0 ? user.location_names.join(', ') : '-'}
+                      <button
+                        type="button"
+                        onClick={() => setLocationsPopupUser(user)}
+                        className="text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        {`${user.location_names.length} locations`}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       <div className="flex flex-wrap gap-2">
@@ -815,11 +822,20 @@ export default function SettingsUsersPage() {
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Locations</p>
-                <p className="mt-1 text-sm text-gray-800">
-                  {selectedUser.location_names.length > 0
-                    ? selectedUser.location_names.join(', ')
-                    : '-'}
-                </p>
+                {selectedUser.location_names.length > 0 ? (
+                  <div className="mt-2 space-y-2">
+                    {selectedUser.location_names.map((locationName, index) => (
+                      <div
+                        key={`${selectedUser.id}-detail-${locationName}-${index}`}
+                        className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800"
+                      >
+                        {locationName}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-800">-</p>
+                )}
               </div>
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
                 <button
@@ -835,6 +851,57 @@ export default function SettingsUsersPage() {
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                 >
                   Edit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {locationsPopupUser ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-4 py-3 md:px-5">
+              <h2 className="text-lg font-semibold text-gray-800">Assigned Locations</h2>
+              <button
+                type="button"
+                onClick={() => setLocationsPopupUser(null)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-lg font-semibold leading-none text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Close locations modal"
+              >
+                X
+              </button>
+            </div>
+            <div className="space-y-3 px-4 py-4 md:px-5 md:py-5">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User</p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">{locationsPopupUser.user_name}</p>
+              </div>
+
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200">
+                {locationsPopupUser.location_names.length === 0 ? (
+                  <p className="px-3 py-3 text-sm text-gray-600">No locations assigned.</p>
+                ) : (
+                  <div className="divide-y divide-gray-200">
+                    {locationsPopupUser.location_names.map((locationName, index) => (
+                      <div
+                        key={`${locationsPopupUser.id}-${locationName}-${index}`}
+                        className="px-3 py-2 text-sm text-gray-800"
+                      >
+                        {locationName}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end border-t pt-4">
+                <button
+                  type="button"
+                  onClick={() => setLocationsPopupUser(null)}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Close
                 </button>
               </div>
             </div>

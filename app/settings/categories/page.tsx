@@ -219,11 +219,11 @@ export default function SettingsCategoriesPage() {
       <div className="mt-6 hidden overflow-hidden rounded-lg bg-white shadow md:block">
         <div className="overflow-x-auto">
           <table className="min-w-full">
-            <thead className="bg-gray-100">
+            <thead className="bg-gradient-to-r from-blue-600 to-indigo-600">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Action</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Name</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Description</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Action</th>
               </tr>
             </thead>
             <tbody>
