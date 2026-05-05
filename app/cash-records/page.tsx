@@ -433,13 +433,13 @@ export default function CashRecordsPage() {
 
   return (
     <div className="p-4 md:p-8">
-      <div className="mb-6 space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="mb-6 space-y-3 md:flex md:items-center md:justify-between md:space-y-0">
+        <div className="flex items-center justify-between md:block">
           <h1 className="text-2xl font-bold text-gray-800">Cash Records</h1>
           <button
             type="button"
             onClick={openAddModal}
-            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 md:hidden"
           >
             Add Cash
           </button>
@@ -471,6 +471,13 @@ export default function CashRecordsPage() {
               <SlidersHorizontal className="h-4 w-4" />
             </button>
           </div>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="hidden items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 md:inline-flex"
+          >
+            Add Cash
+          </button>
 
           {isFilterOpen ? (
             <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-md border bg-white p-3 shadow-lg">
