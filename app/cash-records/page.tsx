@@ -1210,18 +1210,22 @@ export default function CashRecordsPage() {
                 <p className="mt-1 text-sm text-gray-800">{selectedViewRecord.user_name}</p>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Entry Date</p>
+                <p className="mt-1 text-sm text-gray-800">{formatEntryDate(selectedViewRecord.entry_date)}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Narration</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
                   {selectedViewRecord.narration}
                 </p>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Location</p>
-                <p className="mt-1 text-sm text-gray-800">{getLocationName(selectedViewRecord)}</p>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Value</p>
                 <p className="mt-1 text-sm text-gray-800">{formatCurrency(selectedViewRecord.cash_value)}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Location</p>
+                <p className="mt-1 text-sm text-gray-800">{getLocationName(selectedViewRecord)}</p>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</p>
