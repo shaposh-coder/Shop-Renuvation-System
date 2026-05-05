@@ -14,7 +14,6 @@ import {
   Menu,
   Receipt,
   Settings,
-  ShieldCheck,
   X,
 } from 'lucide-react'
 
@@ -22,7 +21,6 @@ const menuItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Cash Records', path: '/cash-records', icon: CircleDollarSign },
   { name: 'Expenses', path: '/expenses', icon: Receipt },
-  { name: 'Approvals', path: '/approvals', icon: ShieldCheck },
   {
     name: 'Settings',
     path: '/settings',
