@@ -74,6 +74,8 @@ export default function ExpensesPage() {
   const [filterCategoryId, setFilterCategoryId] = useState<number | ''>('')
   const [filterStatus, setFilterStatus] = useState<ExpenseStatus | ''>('')
   const [locationId, setLocationId] = useState<number | ''>('')
+  const [locationSearchTerm, setLocationSearchTerm] = useState('')
+  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false)
   const [categoryId, setCategoryId] = useState<number | ''>('')
   const [categorySearchTerm, setCategorySearchTerm] = useState('')
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false)
@@ -97,6 +99,7 @@ export default function ExpensesPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const hasFetchedOnceRef = useRef(false)
   const filterPopoverRef = useRef<HTMLDivElement | null>(null)
+  const locationDropdownRef = useRef<HTMLDivElement | null>(null)
   const categoryDropdownRef = useRef<HTMLDivElement | null>(null)
 
   const getCurrentUserEmail = () => {
@@ -281,6 +284,12 @@ export default function ExpensesPage() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
+        locationDropdownRef.current &&
+        !locationDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsLocationDropdownOpen(false)
+      }
+      if (
         categoryDropdownRef.current &&
         !categoryDropdownRef.current.contains(event.target as Node)
       ) {
@@ -298,6 +307,8 @@ export default function ExpensesPage() {
     setNarration('')
     setExpenseValue('')
     setLocationId('')
+    setLocationSearchTerm('')
+    setIsLocationDropdownOpen(false)
     setCategoryId('')
     setCategorySearchTerm('')
     setIsCategoryDropdownOpen(false)
@@ -323,6 +334,8 @@ export default function ExpensesPage() {
     setNarration(record.narration)
     setExpenseValue(record.expense_value.toString())
     setLocationId(record.location_id)
+    setLocationSearchTerm('')
+    setIsLocationDropdownOpen(false)
     setCategoryId(record.category_id)
     setCategorySearchTerm('')
     setIsCategoryDropdownOpen(false)
@@ -520,6 +533,15 @@ export default function ExpensesPage() {
     showValidation && (!expenseValue || Number.isNaN(Number(expenseValue)) || Number(expenseValue) <= 0)
   const isLocationInvalid = showValidation && !locationId
   const isCategoryInvalid = showValidation && !categoryId
+  const normalizedLocationSearch = locationSearchTerm.trim().toLowerCase()
+  const filteredLocationOptions =
+    normalizedLocationSearch.length === 0
+      ? locations
+      : locations.filter((location) =>
+          location.shop_name.toLowerCase().includes(normalizedLocationSearch)
+        )
+  const selectedLocationLabel =
+    locations.find((location) => location.id === locationId)?.shop_name ?? 'Select location'
 
   const normalizedCategorySearch = categorySearchTerm.trim().toLowerCase()
   const filteredCategoryOptions =
@@ -558,6 +580,7 @@ export default function ExpensesPage() {
   const selectedViewRecord = viewRecordId
     ? records.find((record) => record.id === viewRecordId) ?? null
     : null
+  const showUserColumn = currentUserRole === 'Admin'
 
   return (
     <div className="p-4 md:p-8">
@@ -726,7 +749,9 @@ export default function ExpensesPage() {
           <table className="min-w-full">
             <thead className="bg-gradient-to-r from-blue-600 to-indigo-600">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-white">User Name</th>
+                {showUserColumn ? (
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-white">User Name</th>
+                ) : null}
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Entry Date</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Narration</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Value</th>
@@ -739,20 +764,22 @@ export default function ExpensesPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={showUserColumn ? 8 : 7} className="px-4 py-6 text-center text-sm text-gray-500">
                     Loading expenses...
                   </td>
                 </tr>
               ) : filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={showUserColumn ? 8 : 7} className="px-4 py-6 text-center text-sm text-gray-500">
                     No expenses found.
                   </td>
                 </tr>
               ) : (
                 filteredRecords.map((record) => (
                   <tr key={record.id} className="border-t">
-                    <td className="px-4 py-3 text-sm text-gray-700">{record.user_name}</td>
+                    {showUserColumn ? (
+                      <td className="px-4 py-3 text-sm text-gray-700">{record.user_name}</td>
+                    ) : null}
                     <td className="px-4 py-3 text-sm text-gray-700">{formatEntryDate(record.entry_date)}</td>
                     <td className="px-4 py-3 text-sm text-gray-700" title={record.narration}>
                       <span className="block max-w-[220px] truncate whitespace-nowrap lg:max-w-[300px]">
@@ -843,7 +870,13 @@ export default function ExpensesPage() {
               >
                 <div className="space-y-2 pr-10">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-gray-900">{record.user_name}</p>
+                    {currentUserRole === 'Admin' ? (
+                      <p className="truncate text-sm font-semibold text-gray-900">{record.user_name}</p>
+                    ) : (
+                      <p className="text-sm font-semibold text-gray-900">
+                        {formatEntryDate(record.entry_date)}
+                      </p>
+                    )}
                     <span
                       className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                         record.status === 'Approved'
@@ -854,7 +887,9 @@ export default function ExpensesPage() {
                       {record.status}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500">{formatEntryDate(record.entry_date)}</p>
+                  {currentUserRole === 'Admin' ? (
+                    <p className="text-xs text-gray-500">{formatEntryDate(record.entry_date)}</p>
+                  ) : null}
                   <p className="truncate whitespace-nowrap text-sm text-gray-700">
                     {getShortNarration(record.narration)}
                   </p>
@@ -902,18 +937,16 @@ export default function ExpensesPage() {
                             Approve
                           </button>
                         ) : null}
-                        {record.status === 'Approved' ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setViewRecordId(record.id)
-                              setMobileActionMenuId(null)
-                            }}
-                            className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            View
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewRecordId(record.id)
+                            setMobileActionMenuId(null)
+                          }}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          View
+                        </button>
                         {!isLockedForNonAdmin ? (
                           <button
                             type="button"
@@ -936,18 +969,6 @@ export default function ExpensesPage() {
                             className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                           >
                             Delete
-                          </button>
-                        ) : null}
-                        {record.status !== 'Approved' ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setViewRecordId(record.id)
-                              setMobileActionMenuId(null)
-                            }}
-                            className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            View
                           </button>
                         ) : null}
                       </div>
@@ -1003,18 +1024,16 @@ export default function ExpensesPage() {
                 Approve
               </button>
             ) : null}
-            {selectedActionRecord?.status === 'Approved' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setViewRecordId(actionMenu.recordId)
-                  setActionMenu(null)
-                }}
-                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-              >
-                View
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setViewRecordId(actionMenu.recordId)
+                setActionMenu(null)
+              }}
+              className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+            >
+              View
+            </button>
             {!isEditDeleteBlockedForCurrentUser ? (
               <button
                 type="button"
@@ -1038,18 +1057,6 @@ export default function ExpensesPage() {
                 className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
               >
                 Delete
-              </button>
-            ) : null}
-            {selectedActionRecord?.status !== 'Approved' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setViewRecordId(actionMenu.recordId)
-                  setActionMenu(null)
-                }}
-                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-              >
-                View
               </button>
             ) : null}
           </div>
@@ -1178,29 +1185,62 @@ export default function ExpensesPage() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="expense-location" className="mb-1 block text-sm font-medium text-gray-700">
-                    Location
-                  </label>
-                  <select
-                    id="expense-location"
-                    value={locationId}
-                    onChange={(event) => setLocationId(event.target.value ? Number(event.target.value) : '')}
-                    className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-1 ${
-                      isLocationInvalid
-                        ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
-                        : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                    }`}
-                  >
-                    <option value="">Select location</option>
-                    {locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.shop_name}
-                      </option>
-                    ))}
-                  </select>
-                  {isLocationInvalid ? (
-                    <p className="mt-1 text-xs font-medium text-red-600">Location is required.</p>
-                  ) : null}
+                  <div ref={locationDropdownRef}>
+                    <p className="mb-1 block text-sm font-medium text-gray-700">Location</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsLocationDropdownOpen((prev) => !prev)
+                        setLocationSearchTerm('')
+                      }}
+                      className={`flex w-full items-center justify-between rounded-md bg-white px-3 py-2 text-sm outline-none focus:ring-1 ${
+                        isLocationInvalid
+                          ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
+                          : 'border border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500'
+                      }`}
+                    >
+                      <span className="truncate text-left">{selectedLocationLabel}</span>
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    </button>
+
+                    {isLocationDropdownOpen ? (
+                      <div className="absolute z-20 mt-1 max-h-52 w-[calc(100%-2.5rem)] overflow-y-auto rounded-md border border-gray-300 bg-white p-2 shadow-lg sm:w-[230px]">
+                        <input
+                          type="text"
+                          value={locationSearchTerm}
+                          onChange={(event) => setLocationSearchTerm(event.target.value)}
+                          placeholder="Search location..."
+                          className="mb-2 w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
+                        {filteredLocationOptions.length === 0 ? (
+                          <p className="px-2 py-2 text-sm text-gray-500">No location found.</p>
+                        ) : (
+                          filteredLocationOptions.map((location) => (
+                            <button
+                              key={location.id}
+                              type="button"
+                              onClick={() => {
+                                setLocationId(location.id)
+                                setIsLocationDropdownOpen(false)
+                                setLocationSearchTerm('')
+                              }}
+                              className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
+                                locationId === location.id
+                                  ? 'bg-blue-50 font-medium text-blue-700'
+                                  : 'text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              {location.shop_name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    ) : null}
+
+                    {isLocationInvalid ? (
+                      <p className="mt-1 text-xs font-medium text-red-600">Location is required.</p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div ref={categoryDropdownRef}>
@@ -1358,19 +1398,21 @@ export default function ExpensesPage() {
               </button>
             </div>
             <div className="space-y-3 px-4 py-4 md:px-5 md:py-5">
+              {currentUserRole === 'Admin' ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Name</p>
+                  <p className="mt-1 text-sm text-gray-800">{selectedViewRecord.user_name}</p>
+                </div>
+              ) : null}
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Name</p>
-                <p className="mt-1 text-sm text-gray-800">{selectedViewRecord.user_name}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Entry Date</p>
+                <p className="mt-1 text-sm text-gray-800">{formatEntryDate(selectedViewRecord.entry_date)}</p>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Narration</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
                   {selectedViewRecord.narration}
                 </p>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Entry Date</p>
-                <p className="mt-1 text-sm text-gray-800">{formatEntryDate(selectedViewRecord.entry_date)}</p>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Value</p>
@@ -1386,7 +1428,15 @@ export default function ExpensesPage() {
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</p>
-                <p className="mt-1 text-sm text-gray-800">{selectedViewRecord.status}</p>
+                <span
+                  className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    selectedViewRecord.status === 'Approved'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {selectedViewRecord.status}
+                </span>
               </div>
               <div className="flex justify-end border-t pt-4">
                 <button

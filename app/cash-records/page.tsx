@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { MoreVertical, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
 type CashRecordStatus = 'Pending' | 'Approved'
 type UserRole = 'Admin' | 'Managment' | 'Viewer'
@@ -62,6 +62,8 @@ export default function CashRecordsPage() {
   const [filterLocationId, setFilterLocationId] = useState<number | ''>('')
   const [filterStatus, setFilterStatus] = useState<CashRecordStatus | ''>('')
   const [locationId, setLocationId] = useState<number | ''>('')
+  const [locationSearchTerm, setLocationSearchTerm] = useState('')
+  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false)
   const [currentUserName, setCurrentUserName] = useState('')
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null)
@@ -82,6 +84,7 @@ export default function CashRecordsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const hasFetchedOnceRef = useRef(false)
   const filterPopoverRef = useRef<HTMLDivElement | null>(null)
+  const locationDropdownRef = useRef<HTMLDivElement | null>(null)
 
   const getCurrentUserEmail = () => {
     const emailCookie = document.cookie
@@ -250,12 +253,28 @@ export default function CashRecordsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isFilterOpen])
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        locationDropdownRef.current &&
+        !locationDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsLocationDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const resetForm = () => {
     setUserName(currentUserRole === 'Admin' ? '' : currentUserName)
     setEntryDate(getTodayDateInputValue())
     setNarration('')
     setCashValue('')
     setLocationId('')
+    setLocationSearchTerm('')
+    setIsLocationDropdownOpen(false)
     setShowValidation(false)
   }
 
@@ -278,6 +297,8 @@ export default function CashRecordsPage() {
     setNarration(record.narration)
     setCashValue(record.cash_value.toString())
     setLocationId(record.location_id)
+    setLocationSearchTerm('')
+    setIsLocationDropdownOpen(false)
     setShowValidation(false)
     setIsModalOpen(true)
   }
@@ -463,6 +484,15 @@ export default function CashRecordsPage() {
   const isCashValueInvalid =
     showValidation && (!cashValue || Number.isNaN(Number(cashValue)) || Number(cashValue) <= 0)
   const isLocationInvalid = showValidation && !locationId
+  const normalizedLocationSearch = locationSearchTerm.trim().toLowerCase()
+  const filteredLocationOptions =
+    normalizedLocationSearch.length === 0
+      ? locations
+      : locations.filter((location) =>
+          location.shop_name.toLowerCase().includes(normalizedLocationSearch)
+        )
+  const selectedLocationLabel =
+    locations.find((location) => location.id === locationId)?.shop_name ?? 'Select location'
   const normalizedSearch = searchTerm.trim().toLowerCase()
   const filteredRecords =
     normalizedSearch.length === 0 && !filterUserName && !filterLocationId && !filterStatus
@@ -1070,27 +1100,58 @@ export default function CashRecordsPage() {
                 ) : null}
               </div>
 
-              <div>
-                <label htmlFor="cash-location" className="mb-1 block text-sm font-medium text-gray-700">
-                  Location
-                </label>
-                <select
-                  id="cash-location"
-                  value={locationId}
-                  onChange={(event) => setLocationId(event.target.value ? Number(event.target.value) : '')}
-                  className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-1 ${
+              <div ref={locationDropdownRef}>
+                <p className="mb-1 block text-sm font-medium text-gray-700">Location</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLocationDropdownOpen((prev) => !prev)
+                    setLocationSearchTerm('')
+                  }}
+                  className={`flex w-full items-center justify-between rounded-md bg-white px-3 py-2 text-sm outline-none focus:ring-1 ${
                     isLocationInvalid
                       ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
-                      : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                      : 'border border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500'
                   }`}
                 >
-                  <option value="">Select location</option>
-                  {locations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.shop_name}
-                    </option>
-                  ))}
-                </select>
+                  <span className="truncate text-left">{selectedLocationLabel}</span>
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                </button>
+
+                {isLocationDropdownOpen ? (
+                  <div className="absolute z-20 mt-1 max-h-52 w-[calc(100%-2.5rem)] overflow-y-auto rounded-md border border-gray-300 bg-white p-2 shadow-lg sm:w-[420px]">
+                    <input
+                      type="text"
+                      value={locationSearchTerm}
+                      onChange={(event) => setLocationSearchTerm(event.target.value)}
+                      placeholder="Search location..."
+                      className="mb-2 w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                    {filteredLocationOptions.length === 0 ? (
+                      <p className="px-2 py-2 text-sm text-gray-500">No location found.</p>
+                    ) : (
+                      filteredLocationOptions.map((location) => (
+                        <button
+                          key={location.id}
+                          type="button"
+                          onClick={() => {
+                            setLocationId(location.id)
+                            setIsLocationDropdownOpen(false)
+                            setLocationSearchTerm('')
+                          }}
+                          className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
+                            locationId === location.id
+                              ? 'bg-blue-50 font-medium text-blue-700'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {location.shop_name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+
                 {isLocationInvalid ? (
                   <p className="mt-1 text-xs font-medium text-red-600">Location is required.</p>
                 ) : null}
@@ -1205,10 +1266,12 @@ export default function CashRecordsPage() {
               </button>
             </div>
             <div className="space-y-3 px-4 py-4 md:px-5 md:py-5">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Name</p>
-                <p className="mt-1 text-sm text-gray-800">{selectedViewRecord.user_name}</p>
-              </div>
+              {currentUserRole === 'Admin' ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Name</p>
+                  <p className="mt-1 text-sm text-gray-800">{selectedViewRecord.user_name}</p>
+                </div>
+              ) : null}
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Entry Date</p>
                 <p className="mt-1 text-sm text-gray-800">{formatEntryDate(selectedViewRecord.entry_date)}</p>
