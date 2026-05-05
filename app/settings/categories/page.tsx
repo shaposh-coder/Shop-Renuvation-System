@@ -10,10 +10,16 @@ interface Category {
   description: string | null
 }
 
+interface CategoriesPageRpcResponse {
+  categories: Category[]
+}
+
 export default function SettingsCategoriesPage() {
+  const ITEMS_PER_PAGE = 25
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
   const [categories, setCategories] = useState<Category[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null)
@@ -31,10 +37,7 @@ export default function SettingsCategoriesPage() {
     setIsLoading(true)
     setErrorMessage(null)
 
-    const { data, error } = await supabase
-      .from('categories')
-      .select('id, name, description')
-      .order('id', { ascending: false })
+    const { data, error } = await supabase.rpc('get_categories_page_data')
 
     if (error) {
       setErrorMessage(error.message)
@@ -42,7 +45,8 @@ export default function SettingsCategoriesPage() {
       return
     }
 
-    setCategories(data ?? [])
+    const rpcPayload = (data ?? {}) as Partial<CategoriesPageRpcResponse>
+    setCategories(Array.isArray(rpcPayload.categories) ? rpcPayload.categories : [])
     setIsLoading(false)
   }
 
@@ -178,6 +182,21 @@ export default function SettingsCategoriesPage() {
           const searchableValue = `${category.name} ${category.description ?? ''}`.toLowerCase()
           return searchableValue.includes(normalizedSearch)
         })
+  const totalPages = Math.max(1, Math.ceil(filteredCategories.length / ITEMS_PER_PAGE))
+  const paginatedCategories = filteredCategories.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  )
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
 
   return (
     <div className="p-4 md:p-8">
@@ -240,7 +259,7 @@ export default function SettingsCategoriesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredCategories.map((category) => (
+                paginatedCategories.map((category) => (
                   <tr key={category.id} className="border-t">
                     <td className="px-4 py-3 text-sm text-gray-700">{category.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{category.description || '-'}</td>
@@ -280,7 +299,7 @@ export default function SettingsCategoriesPage() {
             No categories found.
           </div>
         ) : (
-          filteredCategories.map((category) => (
+          paginatedCategories.map((category) => (
             <div
               key={category.id}
               role="button"
@@ -344,6 +363,32 @@ export default function SettingsCategoriesPage() {
           ))
         )}
       </div>
+
+      {!isLoading && filteredCategories.length > 0 ? (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2">
+          <p className="text-xs text-gray-600 sm:text-sm">
+            Page {currentPage} of {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

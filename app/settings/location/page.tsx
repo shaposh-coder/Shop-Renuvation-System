@@ -10,10 +10,16 @@ interface Location {
   address: string
 }
 
+interface LocationPageRpcResponse {
+  locations: Location[]
+}
+
 export default function SettingsLocationPage() {
+  const ITEMS_PER_PAGE = 25
   const [shopName, setShopName] = useState('')
   const [address, setAddress] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
   const [locations, setLocations] = useState<Location[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingLocationId, setEditingLocationId] = useState<number | null>(null)
@@ -45,60 +51,9 @@ export default function SettingsLocationPage() {
       return
     }
 
-    const { data: currentUser, error: currentUserError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('user_email', currentEmail)
-      .single()
-
-    if (currentUserError || !currentUser) {
-      setErrorMessage(currentUserError?.message ?? 'User not found.')
-      setIsLoading(false)
-      return
-    }
-
-    // Admin can see all locations.
-    if (currentUser.role === 'Admin') {
-      const { data, error } = await supabase
-        .from('locations')
-        .select('id, shop_name, address')
-        .order('id', { ascending: false })
-
-      if (error) {
-        setErrorMessage(error.message)
-        setIsLoading(false)
-        return
-      }
-
-      setLocations(data ?? [])
-      setIsLoading(false)
-      return
-    }
-
-    const { data: mappingRows, error: mappingError } = await supabase
-      .from('user_locations')
-      .select('location_id')
-      .eq('user_id', currentUser.id)
-
-    if (mappingError) {
-      setErrorMessage(mappingError.message)
-      setIsLoading(false)
-      return
-    }
-
-    const assignedLocationIds = (mappingRows ?? []).map((row) => row.location_id)
-
-    if (assignedLocationIds.length === 0) {
-      setLocations([])
-      setIsLoading(false)
-      return
-    }
-
-    const { data, error } = await supabase
-      .from('locations')
-      .select('id, shop_name, address')
-      .in('id', assignedLocationIds)
-      .order('id', { ascending: false })
+    const { data, error } = await supabase.rpc('get_locations_page_data', {
+      p_user_email: currentEmail,
+    })
 
     if (error) {
       setErrorMessage(error.message)
@@ -106,7 +61,8 @@ export default function SettingsLocationPage() {
       return
     }
 
-    setLocations(data ?? [])
+    const rpcPayload = (data ?? {}) as Partial<LocationPageRpcResponse>
+    setLocations(Array.isArray(rpcPayload.locations) ? rpcPayload.locations : [])
     setIsLoading(false)
   }
 
@@ -243,6 +199,21 @@ export default function SettingsLocationPage() {
           const searchableValue = `${location.shop_name} ${location.address}`.toLowerCase()
           return searchableValue.includes(normalizedSearch)
         })
+  const totalPages = Math.max(1, Math.ceil(filteredLocations.length / ITEMS_PER_PAGE))
+  const paginatedLocations = filteredLocations.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  )
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
 
   return (
     <div className="p-4 md:p-8">
@@ -305,7 +276,7 @@ export default function SettingsLocationPage() {
                   </td>
                 </tr>
               ) : (
-                filteredLocations.map((location) => (
+                paginatedLocations.map((location) => (
                   <tr key={location.id} className="border-t">
                     <td className="px-4 py-3 text-sm text-gray-700">{location.shop_name}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{location.address}</td>
@@ -345,7 +316,7 @@ export default function SettingsLocationPage() {
             No locations found.
           </div>
         ) : (
-          filteredLocations.map((location) => (
+          paginatedLocations.map((location) => (
             <div
               key={location.id}
               role="button"
@@ -409,6 +380,32 @@ export default function SettingsLocationPage() {
           ))
         )}
       </div>
+
+      {!isLoading && filteredLocations.length > 0 ? (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2">
+          <p className="text-xs text-gray-600 sm:text-sm">
+            Page {currentPage} of {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

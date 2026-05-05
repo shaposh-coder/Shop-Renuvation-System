@@ -265,7 +265,14 @@ export default function Sidebar() {
   return (
     <>
       <div className="sticky top-0 z-30 flex items-center justify-between border-b bg-white px-4 py-3 md:hidden">
-        <h1 className="text-lg font-bold text-primary-600">RMS</h1>
+        <button
+          type="button"
+          onClick={handleBrandClick}
+          className="text-lg font-bold text-primary-600"
+          aria-label="Go to dashboard"
+        >
+          RMS
+        </button>
         <button
           type="button"
           onClick={() => setIsMobileOpen((prev) => !prev)}

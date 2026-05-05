@@ -23,19 +23,9 @@ interface LocationOption {
   shop_name: string
 }
 
-interface UserLocationMapping {
-  user_id: number
-  location_id: number
-  locations:
-    | {
-        id: number
-        shop_name: string
-      }
-    | {
-        id: number
-        shop_name: string
-      }[]
-    | null
+interface UsersPageRpcResponse {
+  users: UserRecord[]
+  locations: LocationOption[]
 }
 
 export default function SettingsUsersPage() {
@@ -68,63 +58,26 @@ export default function SettingsUsersPage() {
     setIsLoading(true)
     setErrorMessage(null)
 
-    const { data: usersData, error: usersError } = await supabase
-      .from('users')
-      .select('id, user_name, user_email, status, role')
-      .order('id', { ascending: false })
+    const { data, error } = await supabase.rpc('get_users_page_data')
 
-    if (usersError) {
-      setErrorMessage(usersError.message)
+    if (error) {
+      setErrorMessage(error.message)
       setIsLoading(false)
       return
     }
 
-    const { data: locationsData, error: locationsError } = await supabase
-      .from('locations')
-      .select('id, shop_name')
-      .order('shop_name', { ascending: true })
+    const rpcPayload = (data ?? {}) as Partial<UsersPageRpcResponse>
+    const rpcUsers = Array.isArray(rpcPayload.users) ? rpcPayload.users : []
+    const rpcLocations = Array.isArray(rpcPayload.locations) ? rpcPayload.locations : []
 
-    if (locationsError) {
-      setErrorMessage(locationsError.message)
-      setIsLoading(false)
-      return
-    }
-
-    const { data: mappingsData, error: mappingsError } = await supabase
-      .from('user_locations')
-      .select('user_id, location_id, locations(id, shop_name)')
-
-    if (mappingsError) {
-      setErrorMessage(mappingsError.message)
-      setIsLoading(false)
-      return
-    }
-
-    const mappedUsers = ((usersData as Omit<UserRecord, 'location_ids' | 'location_names'>[]) ?? []).map(
-      (user) => {
-        const currentMappings = ((mappingsData as UserLocationMapping[] | null) ?? []).filter(
-          (mapping) => mapping.user_id === user.id
-        )
-        const locationIds = currentMappings.map((mapping) => mapping.location_id)
-        const locationNames = currentMappings
-          .map((mapping) => {
-            const locationRecord = Array.isArray(mapping.locations)
-              ? mapping.locations[0]
-              : mapping.locations
-            return locationRecord?.shop_name ?? null
-          })
-          .filter((name): name is string => Boolean(name))
-
-        return {
-          ...user,
-          location_ids: locationIds,
-          location_names: locationNames,
-        }
-      }
+    setUsers(
+      rpcUsers.map((user) => ({
+        ...user,
+        location_ids: user.location_ids ?? [],
+        location_names: user.location_names ?? [],
+      }))
     )
-
-    setUsers(mappedUsers)
-    setLocations((locationsData as LocationOption[]) ?? [])
+    setLocations(rpcLocations)
     setIsLoading(false)
   }
 
