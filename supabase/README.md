@@ -10,6 +10,7 @@ Is folder me saari SQL files ordered format me rakhi hui hain taake kisi bhi nay
 4. `supabase/sql/004_user_locations.sql`
 5. `supabase/sql/005_users_password_hash_migration.sql`
 6. `supabase/sql/006_cash_records.sql`
+7. `supabase/sql/007_cash_records_value.sql`
 
 ## Kaise Run Karna Hai
 
@@ -22,4 +23,4 @@ Is folder me saari SQL files ordered format me rakhi hui hain taake kisi bhi nay
 
 - Files idempotent style me likhi gayi hain (`if not exists`, `drop ... if exists`) taake rerun safe rahe.
 - Future DB changes ke liye nayi numbered file add karein:
-  - `006_*.sql`, `007_*.sql`, etc.
+  - `007_*.sql`, `008_*.sql`, etc.

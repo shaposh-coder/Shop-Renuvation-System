@@ -21,6 +21,7 @@ interface CashRecord {
   id: number
   user_name: string
   narration: string
+  cash_value: number
   location_id: number
   status: CashRecordStatus
   locations: CashRecordLocationRelation | CashRecordLocationRelation[] | null
@@ -50,6 +51,7 @@ interface ActionMenuState {
 export default function CashRecordsPage() {
   const [userName, setUserName] = useState('')
   const [narration, setNarration] = useState('')
+  const [cashValue, setCashValue] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filterUserName, setFilterUserName] = useState('')
@@ -199,7 +201,7 @@ export default function CashRecordsPage() {
 
     let query = supabase
       .from('cash_records')
-      .select('id, user_name, narration, location_id, status, locations(id, shop_name)')
+      .select('id, user_name, narration, cash_value, location_id, status, locations(id, shop_name)')
 
     if (currentUser.role !== 'Admin') {
       query = query.eq('user_name', currentUser.user_name)
@@ -245,6 +247,7 @@ export default function CashRecordsPage() {
   const resetForm = () => {
     setUserName(currentUserRole === 'Admin' ? '' : currentUserName)
     setNarration('')
+    setCashValue('')
     setLocationId('')
     setShowValidation(false)
   }
@@ -265,6 +268,7 @@ export default function CashRecordsPage() {
     setEditingRecordId(record.id)
     setUserName(record.user_name)
     setNarration(record.narration)
+    setCashValue(record.cash_value.toString())
     setLocationId(record.location_id)
     setShowValidation(false)
     setIsModalOpen(true)
@@ -276,8 +280,9 @@ export default function CashRecordsPage() {
     const effectiveUserName =
       currentUserRole === 'Admin' ? trimmedUserName : currentUserName.trim() || trimmedUserName
     const trimmedNarration = narration.trim()
+    const numericCashValue = Number(cashValue)
 
-    if (!effectiveUserName || !trimmedNarration || !locationId) {
+    if (!effectiveUserName || !trimmedNarration || !locationId || !cashValue || Number.isNaN(numericCashValue) || numericCashValue <= 0) {
       setShowValidation(true)
       return
     }
@@ -304,10 +309,11 @@ export default function CashRecordsPage() {
         .update({
           user_name: effectiveUserName,
           narration: trimmedNarration,
+          cash_value: numericCashValue,
           location_id: locationId,
         })
         .eq('id', editingRecordId)
-        .select('id, user_name, narration, location_id, status, locations(id, shop_name)')
+        .select('id, user_name, narration, cash_value, location_id, status, locations(id, shop_name)')
         .single()
 
       if (error) {
@@ -323,10 +329,11 @@ export default function CashRecordsPage() {
         .insert({
           user_name: effectiveUserName,
           narration: trimmedNarration,
+          cash_value: numericCashValue,
           location_id: locationId,
           status: 'Pending',
         })
-        .select('id, user_name, narration, location_id, status, locations(id, shop_name)')
+        .select('id, user_name, narration, cash_value, location_id, status, locations(id, shop_name)')
         .single()
 
       if (error) {
@@ -392,7 +399,7 @@ export default function CashRecordsPage() {
       .from('cash_records')
       .update({ status: 'Approved' })
       .eq('id', approveRecordId)
-      .select('id, user_name, narration, location_id, status, locations(id, shop_name)')
+      .select('id, user_name, narration, cash_value, location_id, status, locations(id, shop_name)')
       .single()
 
     if (error) {
@@ -418,8 +425,12 @@ export default function CashRecordsPage() {
     return `${trimmed.slice(0, 45)}...`
   }
 
+  const formatCurrency = (value: number) => `Rs. ${value.toLocaleString('en-PK')}`
+
   const isUserNameInvalid = showValidation && userName.trim().length === 0
   const isNarrationInvalid = showValidation && narration.trim().length === 0
+  const isCashValueInvalid =
+    showValidation && (!cashValue || Number.isNaN(Number(cashValue)) || Number(cashValue) <= 0)
   const isLocationInvalid = showValidation && !locationId
   const normalizedSearch = searchTerm.trim().toLowerCase()
   const filteredRecords =
@@ -432,7 +443,7 @@ export default function CashRecordsPage() {
           if (normalizedSearch.length === 0) return true
 
           const searchableValue =
-            `${record.user_name} ${record.narration} ${getLocationName(record)} ${record.status}`.toLowerCase()
+            `${record.user_name} ${record.narration} ${getLocationName(record)} ${record.status} ${record.cash_value}`.toLowerCase()
           return searchableValue.includes(normalizedSearch)
         })
   const selectedActionRecord = actionMenu
@@ -592,6 +603,7 @@ export default function CashRecordsPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">User Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Narration</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Value</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Location</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Action</th>
@@ -600,13 +612,13 @@ export default function CashRecordsPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
                     Loading cash records...
                   </td>
                 </tr>
               ) : filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
                     No cash records found.
                   </td>
                 </tr>
@@ -618,6 +630,9 @@ export default function CashRecordsPage() {
                       <span className="block max-w-[260px] truncate whitespace-nowrap lg:max-w-[340px]">
                         {getShortNarration(record.narration)}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-800">
+                      {formatCurrency(record.cash_value)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{getLocationName(record)}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">
@@ -715,7 +730,12 @@ export default function CashRecordsPage() {
                   <p className="truncate whitespace-nowrap text-sm text-gray-700">
                     {getShortNarration(record.narration)}
                   </p>
-                  <p className="text-xs text-gray-500">Location: {getLocationName(record)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-gray-800">
+                      Value: {formatCurrency(record.cash_value)}
+                    </p>
+                    <p className="truncate text-xs text-gray-500">{getLocationName(record)}</p>
+                  </div>
                 </div>
 
                 <div className="absolute right-2 top-2">
@@ -990,6 +1010,29 @@ export default function CashRecordsPage() {
               </div>
 
               <div>
+                <label htmlFor="cash-value" className="mb-1 block text-sm font-medium text-gray-700">
+                  Value (Rs.)
+                </label>
+                <input
+                  id="cash-value"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={cashValue}
+                  onChange={(event) => setCashValue(event.target.value)}
+                  placeholder="Enter amount in Rs."
+                  className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-1 ${
+                    isCashValueInvalid
+                      ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                  }`}
+                />
+                {isCashValueInvalid ? (
+                  <p className="mt-1 text-xs font-medium text-red-600">Value must be greater than 0.</p>
+                ) : null}
+              </div>
+
+              <div>
                 <label htmlFor="cash-location" className="mb-1 block text-sm font-medium text-gray-700">
                   Location
                 </label>
@@ -1137,6 +1180,10 @@ export default function CashRecordsPage() {
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Location</p>
                 <p className="mt-1 text-sm text-gray-800">{getLocationName(selectedViewRecord)}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Value</p>
+                <p className="mt-1 text-sm text-gray-800">{formatCurrency(selectedViewRecord.cash_value)}</p>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</p>
