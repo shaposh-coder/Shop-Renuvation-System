@@ -822,18 +822,16 @@ export default function CashRecordsPage() {
                             Approve
                           </button>
                         ) : null}
-                        {record.status === 'Approved' ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setViewRecordId(record.id)
-                              setMobileActionMenuId(null)
-                            }}
-                            className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            View
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewRecordId(record.id)
+                            setMobileActionMenuId(null)
+                          }}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          View
+                        </button>
 
                         {!isLockedForNonAdmin ? (
                           <button
@@ -858,19 +856,6 @@ export default function CashRecordsPage() {
                             className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                           >
                             Delete
-                          </button>
-                        ) : null}
-
-                        {record.status !== 'Approved' ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setViewRecordId(record.id)
-                              setMobileActionMenuId(null)
-                            }}
-                            className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            View
                           </button>
                         ) : null}
                       </div>
@@ -926,18 +911,16 @@ export default function CashRecordsPage() {
                 Approve
               </button>
             ) : null}
-            {selectedActionRecord?.status === 'Approved' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setViewRecordId(actionMenu.recordId)
-                  setActionMenu(null)
-                }}
-                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-              >
-                View
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setViewRecordId(actionMenu.recordId)
+                setActionMenu(null)
+              }}
+              className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+            >
+              View
+            </button>
             {!isEditDeleteBlockedForCurrentUser ? (
               <button
                 type="button"
@@ -961,18 +944,6 @@ export default function CashRecordsPage() {
                 className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
               >
                 Delete
-              </button>
-            ) : null}
-            {selectedActionRecord?.status !== 'Approved' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setViewRecordId(actionMenu.recordId)
-                  setActionMenu(null)
-                }}
-                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-              >
-                View
               </button>
             ) : null}
           </div>
