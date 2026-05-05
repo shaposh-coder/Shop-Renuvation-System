@@ -75,6 +75,7 @@ export default function CashRecordsPage() {
   const [showValidation, setShowValidation] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const hasFetchedOnceRef = useRef(false)
+  const filterPopoverRef = useRef<HTMLDivElement | null>(null)
 
   const getCurrentUserEmail = () => {
     const emailCookie = document.cookie
@@ -228,6 +229,18 @@ export default function CashRecordsPage() {
     hasFetchedOnceRef.current = true
     loadPageData()
   }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!isFilterOpen) return
+      if (filterPopoverRef.current && !filterPopoverRef.current.contains(event.target as Node)) {
+        setIsFilterOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isFilterOpen])
 
   const resetForm = () => {
     setUserName(currentUserRole === 'Admin' ? '' : currentUserName)
@@ -444,7 +457,10 @@ export default function CashRecordsPage() {
             Add Cash
           </button>
         </div>
-        <div className="relative flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <div
+          ref={filterPopoverRef}
+          className="relative flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center"
+        >
           <button
             type="button"
             onClick={() => setIsFilterOpen((prev) => !prev)}
@@ -480,7 +496,7 @@ export default function CashRecordsPage() {
           </button>
 
           {isFilterOpen ? (
-            <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-md border bg-white p-3 shadow-lg">
+            <div className="absolute left-0 top-full z-30 mt-2 w-72 rounded-md border-2 border-gray-400 bg-white p-3 shadow-lg">
               <div className="space-y-3">
                 {currentUserRole === 'Admin' ? (
                   <div>
