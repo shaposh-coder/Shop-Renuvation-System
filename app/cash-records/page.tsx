@@ -49,14 +49,47 @@ interface ActionMenuState {
   openUp: boolean
 }
 
+interface CashRecordsRpcResponse {
+  total_count: number
+  records: CashRecord[]
+}
+
+let cashRecordsPageCache: {
+  hydrated: boolean
+  currentUserName: string
+  currentUserId: number | null
+  currentUserRole: UserRole | null
+  userOptions: string[]
+  locations: LocationOption[]
+  records: CashRecord[]
+  totalCount: number
+  currentPage: number
+  currentUserContext: CurrentUserContext | null
+  currentUserEmail: string
+} = {
+  hydrated: false,
+  currentUserName: '',
+  currentUserId: null,
+  currentUserRole: null,
+  userOptions: [],
+  locations: [],
+  records: [],
+  totalCount: 0,
+  currentPage: 1,
+  currentUserContext: null,
+  currentUserEmail: '',
+}
+
 export default function CashRecordsPage() {
   const getTodayDateInputValue = () => new Date().toISOString().split('T')[0] ?? ''
+  const ITEMS_PER_PAGE = 25
 
   const [userName, setUserName] = useState('')
   const [entryDate, setEntryDate] = useState(getTodayDateInputValue())
   const [narration, setNarration] = useState('')
   const [cashValue, setCashValue] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filterUserName, setFilterUserName] = useState('')
   const [filterLocationId, setFilterLocationId] = useState<number | ''>('')
@@ -78,10 +111,15 @@ export default function CashRecordsPage() {
   const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null)
   const [mobileActionMenuId, setMobileActionMenuId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isRecordsLoading, setIsRecordsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showValidation, setShowValidation] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentUserContext, setCurrentUserContext] = useState<CurrentUserContext | null>(null)
+  const [currentUserEmail, setCurrentUserEmail] = useState('')
   const hasFetchedOnceRef = useRef(false)
   const filterPopoverRef = useRef<HTMLDivElement | null>(null)
   const locationDropdownRef = useRef<HTMLDivElement | null>(null)
@@ -105,6 +143,7 @@ export default function CashRecordsPage() {
       setCurrentUserName('')
       return null
     }
+    setCurrentUserEmail(currentEmail)
 
     const { data: currentUser, error: currentUserError } = await supabase
       .from('users')
@@ -200,46 +239,146 @@ export default function CashRecordsPage() {
     return currentUser
   }
 
-  const fetchCashRecords = async (currentUser: CurrentUserContext | null) => {
-    if (!currentUser) {
+  const fetchCashRecords = async (
+    page = 1,
+    searchValue = '',
+    selectedUserName = '',
+    selectedLocationId: number | '' = '',
+    selectedStatus: CashRecordStatus | '' = ''
+  ) => {
+    if (!currentUserEmail) {
       setRecords([])
+      setTotalCount(0)
       return
     }
 
-    let query = supabase
-      .from('cash_records')
-      .select(
-        'id, user_name, entry_date, narration, cash_value, location_id, status, locations(id, shop_name)'
-      )
-
-    if (currentUser.role !== 'Admin') {
-      query = query.eq('user_name', currentUser.user_name)
-    }
-
-    const { data, error } = await query.order('id', { ascending: false })
+    const { data, error } = await supabase.rpc('get_cash_records_page_data', {
+      p_user_email: currentUserEmail,
+      p_page: page,
+      p_page_size: ITEMS_PER_PAGE,
+      p_search: searchValue.trim(),
+      p_filter_user_name: selectedUserName.trim(),
+      p_filter_location_id: selectedLocationId || null,
+      p_filter_status: selectedStatus || '',
+    })
 
     if (error) {
       setErrorMessage(error.message)
       setRecords([])
+      setTotalCount(0)
       return
     }
 
-    setRecords((data as CashRecord[]) ?? [])
+    const rpcPayload = (data ?? {}) as Partial<CashRecordsRpcResponse>
+    setRecords(Array.isArray(rpcPayload.records) ? rpcPayload.records : [])
+    setTotalCount(typeof rpcPayload.total_count === 'number' ? rpcPayload.total_count : 0)
   }
 
-  const loadPageData = async () => {
-    setIsLoading(true)
+  const loadPageData = async (silent = false) => {
+    if (!silent) setIsLoading(true)
     setErrorMessage(null)
     const currentUser = await fetchAllowedLocations()
-    await fetchCashRecords(currentUser)
-    setIsLoading(false)
+    setCurrentUserContext(currentUser)
+    if (!silent) setIsLoading(false)
   }
 
   useEffect(() => {
     if (hasFetchedOnceRef.current) return
     hasFetchedOnceRef.current = true
-    loadPageData()
+    if (cashRecordsPageCache.hydrated) {
+      setCurrentUserName(cashRecordsPageCache.currentUserName)
+      setCurrentUserId(cashRecordsPageCache.currentUserId)
+      setCurrentUserRole(cashRecordsPageCache.currentUserRole)
+      setUserOptions(cashRecordsPageCache.userOptions)
+      setLocations(cashRecordsPageCache.locations)
+      setRecords(cashRecordsPageCache.records)
+      setTotalCount(cashRecordsPageCache.totalCount)
+      setCurrentPage(cashRecordsPageCache.currentPage)
+      setCurrentUserContext(cashRecordsPageCache.currentUserContext)
+      setCurrentUserEmail(cashRecordsPageCache.currentUserEmail)
+      setIsLoading(false)
+      loadPageData(true)
+      return
+    }
+
+    loadPageData(false)
   }, [])
+
+  useEffect(() => {
+    cashRecordsPageCache = {
+      hydrated: Boolean(currentUserEmail || records.length > 0),
+      currentUserName,
+      currentUserId,
+      currentUserRole,
+      userOptions,
+      locations,
+      records,
+      totalCount,
+      currentPage,
+      currentUserContext,
+      currentUserEmail,
+    }
+  }, [
+    currentUserName,
+    currentUserId,
+    currentUserRole,
+    userOptions,
+    locations,
+    records,
+    totalCount,
+    currentPage,
+    currentUserContext,
+    currentUserEmail,
+  ])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [searchTerm])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchTerm, filterUserName, filterLocationId, filterStatus])
+
+  useEffect(() => {
+    if (!hasFetchedOnceRef.current || !currentUserContext) return
+
+    const loadRecords = async () => {
+      setIsRecordsLoading(true)
+      await fetchCashRecords(
+        currentPage,
+        debouncedSearchTerm,
+        filterUserName,
+        filterLocationId,
+        filterStatus
+      )
+      setIsRecordsLoading(false)
+    }
+
+    loadRecords()
+  }, [
+    currentPage,
+    currentUserEmail,
+    currentUserContext,
+    debouncedSearchTerm,
+    filterUserName,
+    filterLocationId,
+    filterStatus,
+  ])
+
+  const refreshCurrentPage = async () => {
+    if (!currentUserContext) return
+    await fetchCashRecords(
+      currentPage,
+      debouncedSearchTerm,
+      filterUserName,
+      filterLocationId,
+      filterStatus
+    )
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -385,7 +524,11 @@ export default function CashRecordsPage() {
         return
       }
 
-      setRecords((prev) => [data as CashRecord, ...prev])
+      if (currentPage !== 1) {
+        setCurrentPage(1)
+      } else {
+        await refreshCurrentPage()
+      }
     }
 
     setIsSaving(false)
@@ -421,7 +564,7 @@ export default function CashRecordsPage() {
       return
     }
 
-    setRecords((prev) => prev.filter((record) => record.id !== deleteRecordId))
+    await refreshCurrentPage()
     setDeleteRecordId(null)
     setActionMenu(null)
     setIsDeleting(false)
@@ -493,20 +636,8 @@ export default function CashRecordsPage() {
         )
   const selectedLocationLabel =
     locations.find((location) => location.id === locationId)?.shop_name ?? 'Select location'
-  const normalizedSearch = searchTerm.trim().toLowerCase()
-  const filteredRecords =
-    normalizedSearch.length === 0 && !filterUserName && !filterLocationId && !filterStatus
-      ? records
-      : records.filter((record) => {
-          if (filterUserName && record.user_name !== filterUserName) return false
-          if (filterLocationId && record.location_id !== filterLocationId) return false
-          if (filterStatus && record.status !== filterStatus) return false
-          if (normalizedSearch.length === 0) return true
-
-          const searchableValue =
-            `${record.user_name} ${record.narration} ${getLocationName(record)} ${record.status} ${record.cash_value}`.toLowerCase()
-          return searchableValue.includes(normalizedSearch)
-        })
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE))
+  const showRecordsLoading = (isLoading || isRecordsLoading) && records.length === 0
   const selectedActionRecord = actionMenu
     ? records.find((record) => record.id === actionMenu.recordId) ?? null
     : null
@@ -675,20 +806,20 @@ export default function CashRecordsPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
+              {showRecordsLoading ? (
                 <tr>
                   <td colSpan={showUserColumn ? 7 : 6} className="px-4 py-6 text-center text-sm text-gray-500">
                     Loading cash records...
                   </td>
                 </tr>
-              ) : filteredRecords.length === 0 ? (
+              ) : records.length === 0 ? (
                 <tr>
                   <td colSpan={showUserColumn ? 7 : 6} className="px-4 py-6 text-center text-sm text-gray-500">
                     No cash records found.
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((record) => (
+                records.map((record) => (
                   <tr key={record.id} className="border-t">
                     {showUserColumn ? (
                       <td className="px-4 py-3 text-sm text-gray-700">{record.user_name}</td>
@@ -752,16 +883,16 @@ export default function CashRecordsPage() {
       </div>
 
       <div className="mt-6 space-y-3 md:hidden">
-        {isLoading ? (
+        {showRecordsLoading ? (
           <div className="rounded-lg bg-white px-4 py-6 text-center text-sm text-gray-500 shadow">
             Loading cash records...
           </div>
-        ) : filteredRecords.length === 0 ? (
+        ) : records.length === 0 ? (
           <div className="rounded-lg bg-white px-4 py-6 text-center text-sm text-gray-500 shadow">
             No cash records found.
           </div>
         ) : (
-          filteredRecords.map((record) => {
+          records.map((record) => {
             const isLockedForNonAdmin = currentUserRole !== 'Admin' && record.status === 'Approved'
 
             return (
@@ -897,6 +1028,32 @@ export default function CashRecordsPage() {
           })
         )}
       </div>
+
+      {totalCount > 0 ? (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2">
+          <p className="text-xs text-gray-600 sm:text-sm">
+            Page {currentPage} of {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1 || isRecordsLoading}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages || isRecordsLoading}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {mobileActionMenuId !== null ? (
         <button
