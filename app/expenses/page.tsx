@@ -104,8 +104,13 @@ export default function ExpensesPage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filterUserName, setFilterUserName] = useState('')
   const [filterLocationId, setFilterLocationId] = useState<number | ''>('')
+  const [filterLocationInput, setFilterLocationInput] = useState('')
   const [filterCategoryId, setFilterCategoryId] = useState<number | ''>('')
+  const [filterCategoryInput, setFilterCategoryInput] = useState('')
   const [filterStatus, setFilterStatus] = useState<ExpenseStatus | ''>('')
+  const [filterStatusInput, setFilterStatusInput] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const [locationId, setLocationId] = useState<number | ''>('')
   const [locationSearchTerm, setLocationSearchTerm] = useState('')
   const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false)
@@ -272,7 +277,9 @@ export default function ExpensesPage() {
     selectedUserName = '',
     selectedLocationId: number | '' = '',
     selectedCategoryId: number | '' = '',
-    selectedStatus: ExpenseStatus | '' = ''
+    selectedStatus: ExpenseStatus | '' = '',
+    selectedDateFrom = '',
+    selectedDateTo = ''
   ) => {
     if (!currentUserEmail) {
       setRecords([])
@@ -289,6 +296,8 @@ export default function ExpensesPage() {
       p_filter_location_id: selectedLocationId || null,
       p_filter_category_id: selectedCategoryId || null,
       p_filter_status: selectedStatus || '',
+      p_filter_date_from: selectedDateFrom || null,
+      p_filter_date_to: selectedDateTo || null,
     })
 
     if (error) {
@@ -371,7 +380,7 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [debouncedSearchTerm, filterUserName, filterLocationId, filterCategoryId, filterStatus])
+  }, [debouncedSearchTerm, filterUserName, filterLocationId, filterCategoryId, filterStatus, filterDateFrom, filterDateTo])
 
   useEffect(() => {
     if (!hasFetchedOnceRef.current || !currentUserContext) return
@@ -384,7 +393,9 @@ export default function ExpensesPage() {
         filterUserName,
         filterLocationId,
         filterCategoryId,
-        filterStatus
+        filterStatus,
+        filterDateFrom,
+        filterDateTo
       )
       setIsRecordsLoading(false)
     }
@@ -399,6 +410,8 @@ export default function ExpensesPage() {
     filterLocationId,
     filterCategoryId,
     filterStatus,
+    filterDateFrom,
+    filterDateTo,
   ])
 
   const refreshCurrentPage = async () => {
@@ -409,7 +422,9 @@ export default function ExpensesPage() {
       filterUserName,
       filterLocationId,
       filterCategoryId,
-      filterStatus
+      filterStatus,
+      filterDateFrom,
+      filterDateTo
     )
   }
 
@@ -772,74 +787,114 @@ export default function ExpensesPage() {
                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                       User Name
                     </label>
-                    <select
+                    <input
+                      list="expense-filter-users"
                       value={filterUserName}
                       onChange={(event) => setFilterUserName(event.target.value)}
+                      placeholder="Search user..."
                       className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">All Users</option>
+                    />
+                    <datalist id="expense-filter-users">
                       {userOptions.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
+                        <option key={name} value={name} />
                       ))}
-                    </select>
+                    </datalist>
                   </div>
                 ) : null}
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Entry Date Range
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={filterDateFrom}
+                      onChange={(event) => setFilterDateFrom(event.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                    <input
+                      type="date"
+                      value={filterDateTo}
+                      onChange={(event) => setFilterDateTo(event.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Location
                   </label>
-                  <select
-                    value={filterLocationId}
-                    onChange={(event) =>
-                      setFilterLocationId(event.target.value ? Number(event.target.value) : '')
-                    }
+                  <input
+                    list="expense-filter-locations"
+                    value={filterLocationInput}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setFilterLocationInput(value)
+                      const matched = locations.find(
+                        (location) => location.shop_name.toLowerCase() === value.trim().toLowerCase()
+                      )
+                      setFilterLocationId(matched?.id ?? '')
+                    }}
+                    placeholder="Search location..."
                     className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">All Locations</option>
+                  />
+                  <datalist id="expense-filter-locations">
                     {locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.shop_name}
-                      </option>
+                      <option key={location.id} value={location.shop_name} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Category
                   </label>
-                  <select
-                    value={filterCategoryId}
-                    onChange={(event) =>
-                      setFilterCategoryId(event.target.value ? Number(event.target.value) : '')
-                    }
+                  <input
+                    list="expense-filter-categories"
+                    value={filterCategoryInput}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setFilterCategoryInput(value)
+                      const matched = categories.find(
+                        (category) => category.name.toLowerCase() === value.trim().toLowerCase()
+                      )
+                      setFilterCategoryId(matched?.id ?? '')
+                    }}
+                    placeholder="Search category..."
                     className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">All Categories</option>
+                  />
+                  <datalist id="expense-filter-categories">
                     {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
+                      <option key={category.id} value={category.name} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Status
                   </label>
-                  <select
-                    value={filterStatus}
-                    onChange={(event) => setFilterStatus(event.target.value as ExpenseStatus | '')}
+                  <input
+                    list="expense-filter-statuses"
+                    value={filterStatusInput}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setFilterStatusInput(value)
+                      if (value === 'Pending' || value === 'Approved') {
+                        setFilterStatus(value as ExpenseStatus)
+                      } else {
+                        setFilterStatus('')
+                      }
+                    }}
+                    placeholder="Search status..."
                     className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">All Status</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Approved">Approved</option>
-                  </select>
+                  />
+                  <datalist id="expense-filter-statuses">
+                    <option value="Pending" />
+                    <option value="Approved" />
+                  </datalist>
                 </div>
 
                 <div className="flex justify-end gap-2 border-t pt-3">
@@ -848,8 +903,13 @@ export default function ExpensesPage() {
                     onClick={() => {
                       setFilterUserName('')
                       setFilterLocationId('')
+                      setFilterLocationInput('')
                       setFilterCategoryId('')
+                      setFilterCategoryInput('')
                       setFilterStatus('')
+                      setFilterStatusInput('')
+                      setFilterDateFrom('')
+                      setFilterDateTo('')
                     }}
                     className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
                   >

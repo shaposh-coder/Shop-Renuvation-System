@@ -5,7 +5,9 @@ create or replace function public.get_cash_records_page_data(
   p_search text default '',
   p_filter_user_name text default '',
   p_filter_location_id bigint default null,
-  p_filter_status text default ''
+  p_filter_status text default '',
+  p_filter_date_from date default null,
+  p_filter_date_to date default null
 )
 returns jsonb
 language plpgsql
@@ -64,6 +66,14 @@ begin
         or cr.status = trim(p_filter_status)
       )
       and (
+        p_filter_date_from is null
+        or cr.entry_date >= p_filter_date_from
+      )
+      and (
+        p_filter_date_to is null
+        or cr.entry_date <= p_filter_date_to
+      )
+      and (
         coalesce(trim(p_search), '') = ''
         or cr.user_name ilike '%' || trim(p_search) || '%'
         or cr.narration ilike '%' || trim(p_search) || '%'
@@ -102,6 +112,14 @@ begin
       and (
         coalesce(trim(p_filter_status), '') = ''
         or cr.status = trim(p_filter_status)
+      )
+      and (
+        p_filter_date_from is null
+        or cr.entry_date >= p_filter_date_from
+      )
+      and (
+        p_filter_date_to is null
+        or cr.entry_date <= p_filter_date_to
       )
       and (
         coalesce(trim(p_search), '') = ''
@@ -146,4 +164,4 @@ begin
 end;
 $$;
 
-grant execute on function public.get_cash_records_page_data(text, integer, integer, text, text, bigint, text) to anon, authenticated;
+grant execute on function public.get_cash_records_page_data(text, integer, integer, text, text, bigint, text, date, date) to anon, authenticated;
