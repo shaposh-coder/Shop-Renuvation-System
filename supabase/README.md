@@ -18,6 +18,7 @@ Is folder me saari SQL files ordered format me rakhi hui hain taake kisi bhi nay
 12. `supabase/sql/012_categories_page_rpc.sql`
 13. `supabase/sql/013_cash_records_page_rpc.sql`
 14. `supabase/sql/014_expenses_page_rpc.sql`
+15. `supabase/sql/015_dashboard_summary_rpc.sql`
 
 ## Kaise Run Karna Hai
 

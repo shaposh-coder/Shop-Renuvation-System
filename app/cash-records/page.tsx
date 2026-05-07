@@ -95,7 +95,6 @@ export default function CashRecordsPage() {
   const [filterLocationId, setFilterLocationId] = useState<number | ''>('')
   const [filterLocationInput, setFilterLocationInput] = useState('')
   const [filterStatus, setFilterStatus] = useState<CashRecordStatus | ''>('')
-  const [filterStatusInput, setFilterStatusInput] = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [locationId, setLocationId] = useState<number | ''>('')
@@ -785,25 +784,15 @@ export default function CashRecordsPage() {
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Status
                   </label>
-                  <input
-                    list="cash-filter-statuses"
-                    value={filterStatusInput}
-                    onChange={(event) => {
-                      const value = event.target.value
-                      setFilterStatusInput(value)
-                      if (value === 'Pending' || value === 'Approved') {
-                        setFilterStatus(value as CashRecordStatus)
-                      } else {
-                        setFilterStatus('')
-                      }
-                    }}
-                    placeholder="Search status..."
+                  <select
+                    value={filterStatus}
+                    onChange={(event) => setFilterStatus(event.target.value as CashRecordStatus | '')}
                     className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                  <datalist id="cash-filter-statuses">
-                    <option value="Pending" />
-                    <option value="Approved" />
-                  </datalist>
+                  >
+                    <option value="">All Status</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                  </select>
                 </div>
 
                 <div className="flex justify-end gap-2 border-t pt-3">
@@ -814,7 +803,6 @@ export default function CashRecordsPage() {
                       setFilterLocationId('')
                       setFilterLocationInput('')
                       setFilterStatus('')
-                      setFilterStatusInput('')
                       setFilterDateFrom('')
                       setFilterDateTo('')
                     }}
