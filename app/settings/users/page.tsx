@@ -7,6 +7,7 @@ import { sha256 } from 'js-sha256'
 
 type UserStatus = 'Active' | 'In-active'
 type UserRole = 'Admin' | 'Managment' | 'Viewer'
+type AdminAccess = 'All Access' | 'Edit and Delete' | 'Approvals Only'
 
 interface UserRecord {
   id: number
@@ -14,6 +15,7 @@ interface UserRecord {
   user_email: string
   status: UserStatus
   role: UserRole
+  admin_access: AdminAccess | null
   location_ids: number[]
   location_names: string[]
 }
@@ -35,6 +37,7 @@ export default function SettingsUsersPage() {
   const [status, setStatus] = useState<UserStatus>('Active')
   const [role, setRole] = useState<UserRole>('Viewer')
   const [selectedLocationIds, setSelectedLocationIds] = useState<number[]>([])
+  const [adminAccess, setAdminAccess] = useState<AdminAccess>('All Access')
   const [users, setUsers] = useState<UserRecord[]>([])
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -107,6 +110,7 @@ export default function SettingsUsersPage() {
     setUserPassword('')
     setStatus('Active')
     setRole('Viewer')
+    setAdminAccess('All Access')
     setSelectedLocationIds([])
     setIsPasswordVisible(false)
     setShowValidation(false)
@@ -134,6 +138,7 @@ export default function SettingsUsersPage() {
     setUserPassword('')
     setStatus(user.status)
     setRole(user.role)
+    setAdminAccess(user.admin_access ?? 'All Access')
     setSelectedLocationIds(user.location_ids)
     setShowValidation(false)
     setIsLocationsDropdownOpen(false)
@@ -195,6 +200,7 @@ export default function SettingsUsersPage() {
     setIsSaving(true)
     setErrorMessage(null)
     const effectiveLocationIds = role === 'Admin' ? [] : selectedLocationIds
+    const effectiveAdminAccess = role === 'Admin' ? adminAccess : null
 
     if (editingUserId !== null) {
       const updatePayload: {
@@ -202,12 +208,14 @@ export default function SettingsUsersPage() {
         user_email: string
         status: UserStatus
         role: UserRole
+        admin_access: AdminAccess | null
         user_password?: string
       } = {
         user_name: trimmedName,
         user_email: trimmedEmail,
         status,
         role,
+        admin_access: effectiveAdminAccess,
       }
       if (trimmedPassword) {
         updatePayload.user_password = sha256(trimmedPassword)
@@ -217,7 +225,7 @@ export default function SettingsUsersPage() {
             .from('users')
         .update(updatePayload)
             .eq('id', editingUserId)
-        .select('id, user_name, user_email, status, role')
+        .select('id, user_name, user_email, status, role, admin_access')
         .single()
 
       if (error) {
@@ -259,8 +267,9 @@ export default function SettingsUsersPage() {
           user_password: sha256(trimmedPassword),
           status,
           role,
+          admin_access: effectiveAdminAccess,
         })
-        .select('id, user_name, user_email, status, role')
+        .select('id, user_name, user_email, status, role, admin_access')
         .single()
 
       if (error) {
@@ -353,6 +362,7 @@ export default function SettingsUsersPage() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Password</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Role</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Admin Access</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Locations</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Action</th>
               </tr>
@@ -360,13 +370,13 @@ export default function SettingsUsersPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-gray-500">
                     Loading users...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-gray-500">
                     No users added yet.
                   </td>
                 </tr>
@@ -378,6 +388,9 @@ export default function SettingsUsersPage() {
                     <td className="px-4 py-3 text-sm text-gray-700">********</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{user.status}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{user.role}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {user.role === 'Admin' ? user.admin_access ?? 'All Access' : '-'}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
               <button
                         type="button"
@@ -620,6 +633,26 @@ export default function SettingsUsersPage() {
                     <option value="Viewer">Viewer</option>
                   </select>
                 </div>
+                {role === 'Admin' ? (
+                  <div>
+                    <label
+                      htmlFor="user-admin-access"
+                      className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                      Admin Access
+                    </label>
+                    <select
+                      id="user-admin-access"
+                      value={adminAccess}
+                      onChange={(event) => setAdminAccess(event.target.value as AdminAccess)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="All Access">All Access</option>
+                      <option value="Edit and Delete">Edit and Delete</option>
+                      <option value="Approvals Only">Approvals Only</option>
+                    </select>
+                  </div>
+                ) : null}
                 </div>
 
                 <div>
@@ -773,6 +806,14 @@ export default function SettingsUsersPage() {
                   {selectedUser.status} / {selectedUser.role}
                 </p>
               </div>
+              {selectedUser.role === 'Admin' ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Admin Access
+                  </p>
+                  <p className="mt-1 text-sm text-gray-800">{selectedUser.admin_access ?? 'All Access'}</p>
+                </div>
+              ) : null}
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Locations</p>
                 {selectedUser.location_names.length > 0 ? (

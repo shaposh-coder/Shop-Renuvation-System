@@ -6,6 +6,7 @@ import { ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
 type CashRecordStatus = 'Pending' | 'Approved'
 type UserRole = 'Admin' | 'Managment' | 'Viewer'
+type AdminAccess = 'All Access' | 'Edit and Delete' | 'Approvals Only'
 
 interface LocationOption {
   id: number
@@ -40,6 +41,7 @@ interface CurrentUserContext {
   id: number
   role: UserRole
   user_name: string
+  admin_access: AdminAccess | null
 }
 
 interface ActionMenuState {
@@ -54,11 +56,38 @@ interface CashRecordsRpcResponse {
   records: CashRecord[]
 }
 
+const canApproveRecord = (
+  status: CashRecordStatus,
+  role: UserRole | null,
+  adminAccess: AdminAccess | null
+) => role === 'Admin' && status === 'Pending' && (adminAccess === 'All Access' || adminAccess === 'Approvals Only')
+
+const canEditRecord = (
+  record: CashRecord,
+  role: UserRole | null,
+  adminAccess: AdminAccess | null
+) => {
+  if (role === 'Admin') {
+    if (adminAccess === 'Approvals Only') return false
+    if (adminAccess === 'Edit and Delete') return record.status === 'Pending'
+    return true
+  }
+
+  return record.status !== 'Approved'
+}
+
+const canDeleteRecord = (
+  record: CashRecord,
+  role: UserRole | null,
+  adminAccess: AdminAccess | null
+) => canEditRecord(record, role, adminAccess)
+
 let cashRecordsPageCache: {
   hydrated: boolean
   currentUserName: string
   currentUserId: number | null
   currentUserRole: UserRole | null
+  currentUserAdminAccess: AdminAccess | null
   userOptions: string[]
   locations: LocationOption[]
   records: CashRecord[]
@@ -71,6 +100,7 @@ let cashRecordsPageCache: {
   currentUserName: '',
   currentUserId: null,
   currentUserRole: null,
+  currentUserAdminAccess: null,
   userOptions: [],
   locations: [],
   records: [],
@@ -107,6 +137,7 @@ export default function CashRecordsPage() {
   const [currentUserName, setCurrentUserName] = useState('')
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null)
+  const [currentUserAdminAccess, setCurrentUserAdminAccess] = useState<AdminAccess | null>(null)
   const [userOptions, setUserOptions] = useState<string[]>([])
   const [records, setRecords] = useState<CashRecord[]>([])
   const [locations, setLocations] = useState<LocationOption[]>([])
@@ -147,6 +178,7 @@ export default function CashRecordsPage() {
       setLocations([])
       setCurrentUserId(null)
       setCurrentUserRole(null)
+      setCurrentUserAdminAccess(null)
       setCurrentUserName('')
       return null
     }
@@ -154,9 +186,9 @@ export default function CashRecordsPage() {
 
     const { data: currentUser, error: currentUserError } = await supabase
       .from('users')
-      .select('id, role, user_name')
+      .select('id, role, user_name, admin_access')
       .eq('user_email', currentEmail)
-      .single<{ id: number; role: UserRole; user_name: string }>()
+      .single<{ id: number; role: UserRole; user_name: string; admin_access: AdminAccess | null }>()
 
     if (currentUserError || !currentUser) {
       setErrorMessage(currentUserError?.message ?? 'User not found.')
@@ -164,12 +196,14 @@ export default function CashRecordsPage() {
       setUserOptions([])
       setCurrentUserId(null)
       setCurrentUserRole(null)
+      setCurrentUserAdminAccess(null)
       setCurrentUserName('')
       return null
     }
 
     setCurrentUserId(currentUser.id)
     setCurrentUserRole(currentUser.role)
+    setCurrentUserAdminAccess(currentUser.admin_access)
     setCurrentUserName(currentUser.user_name)
 
     // Admin can use all locations.
@@ -300,6 +334,7 @@ export default function CashRecordsPage() {
       setCurrentUserName(cashRecordsPageCache.currentUserName)
       setCurrentUserId(cashRecordsPageCache.currentUserId)
       setCurrentUserRole(cashRecordsPageCache.currentUserRole)
+      setCurrentUserAdminAccess(cashRecordsPageCache.currentUserAdminAccess)
       setUserOptions(cashRecordsPageCache.userOptions)
       setLocations(cashRecordsPageCache.locations)
       setRecords(cashRecordsPageCache.records)
@@ -321,6 +356,7 @@ export default function CashRecordsPage() {
       currentUserName,
       currentUserId,
       currentUserRole,
+      currentUserAdminAccess,
       userOptions,
       locations,
       records,
@@ -333,6 +369,7 @@ export default function CashRecordsPage() {
     currentUserName,
     currentUserId,
     currentUserRole,
+    currentUserAdminAccess,
     userOptions,
     locations,
     records,
@@ -492,8 +529,8 @@ export default function CashRecordsPage() {
         setIsSaving(false)
         return
       }
-      if (currentUserRole !== 'Admin' && editingRecord.status === 'Approved') {
-        setErrorMessage('Approved cash records cannot be edited.')
+      if (!canEditRecord(editingRecord, currentUserRole, currentUserAdminAccess)) {
+        setErrorMessage('You do not have access to edit this cash record.')
         setIsSaving(false)
         setIsModalOpen(false)
         return
@@ -568,8 +605,8 @@ export default function CashRecordsPage() {
       setIsDeleting(false)
       return
     }
-    if (currentUserRole !== 'Admin' && targetRecord.status === 'Approved') {
-      setErrorMessage('Approved cash records cannot be deleted.')
+    if (!canDeleteRecord(targetRecord, currentUserRole, currentUserAdminAccess)) {
+      setErrorMessage('You do not have access to delete this cash record.')
       setDeleteRecordId(null)
       setIsDeleting(false)
       return
@@ -591,8 +628,9 @@ export default function CashRecordsPage() {
 
   const handleApproveConfirm = async () => {
     if (approveRecordId === null) return
-    if (currentUserRole !== 'Admin') {
-      setErrorMessage('Only Admin can approve cash records.')
+    const targetRecord = records.find((record) => record.id === approveRecordId)
+    if (!targetRecord || !canApproveRecord(targetRecord.status, currentUserRole, currentUserAdminAccess)) {
+      setErrorMessage('You do not have access to approve this cash record.')
       setApproveRecordId(null)
       return
     }
@@ -673,11 +711,15 @@ export default function CashRecordsPage() {
     ? records.find((record) => record.id === actionMenu.recordId) ?? null
     : null
   const isEditDeleteBlockedForCurrentUser =
-    selectedActionRecord?.status === 'Approved' && currentUserRole !== 'Admin'
+    selectedActionRecord
+      ? !canEditRecord(selectedActionRecord, currentUserRole, currentUserAdminAccess)
+      : false
   const selectedViewRecord = viewRecordId
     ? records.find((record) => record.id === viewRecordId) ?? null
     : null
   const showUserColumn = currentUserRole === 'Admin'
+  const canApprove = (status: CashRecordStatus) =>
+    canApproveRecord(status, currentUserRole, currentUserAdminAccess)
 
   return (
     <div className="p-4 md:p-8">
@@ -1051,7 +1093,9 @@ export default function CashRecordsPage() {
           </div>
         ) : (
           records.map((record) => {
-            const isLockedForNonAdmin = currentUserRole !== 'Admin' && record.status === 'Approved'
+            const canRecordApprove = canApprove(record.status)
+            const canRecordEdit = canEditRecord(record, currentUserRole, currentUserAdminAccess)
+            const canRecordDelete = canDeleteRecord(record, currentUserRole, currentUserAdminAccess)
 
             return (
               <div
@@ -1123,20 +1167,14 @@ export default function CashRecordsPage() {
                         onClick={(event) => event.stopPropagation()}
                         className="absolute right-0 top-10 z-20 min-w-[140px] rounded-md border bg-white py-1 shadow-lg"
                       >
-                        {currentUserRole === 'Admin' ? (
+                        {canRecordApprove ? (
                           <button
                             type="button"
                             onClick={() => {
-                              if (record.status === 'Approved') return
                               setApproveRecordId(record.id)
                               setMobileActionMenuId(null)
                             }}
-                            disabled={record.status === 'Approved'}
-                            className={`block w-full px-3 py-2 text-left text-sm ${
-                              record.status === 'Approved'
-                                ? 'cursor-not-allowed text-emerald-300'
-                                : 'text-emerald-600 hover:bg-emerald-50'
-                            }`}
+                            className="block w-full px-3 py-2 text-left text-sm text-emerald-600 hover:bg-emerald-50"
                           >
                             Approve
                           </button>
@@ -1152,7 +1190,7 @@ export default function CashRecordsPage() {
                           View
                         </button>
 
-                        {!isLockedForNonAdmin ? (
+                        {canRecordEdit ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -1165,7 +1203,7 @@ export default function CashRecordsPage() {
                           </button>
                         ) : null}
 
-                        {!isLockedForNonAdmin ? (
+                        {canRecordDelete ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -1238,20 +1276,15 @@ export default function CashRecordsPage() {
               transform: `translate(-100%, ${actionMenu.openUp ? '-100%' : '0'})`,
             }}
           >
-            {currentUserRole === 'Admin' ? (
+            {canApprove(selectedActionRecord?.status ?? 'Approved') ? (
               <button
                 type="button"
                 onClick={() => {
-                  if (!selectedActionRecord || selectedActionRecord.status === 'Approved') return
+                  if (!selectedActionRecord) return
                   setApproveRecordId(actionMenu.recordId)
                   setActionMenu(null)
                 }}
-                disabled={selectedActionRecord?.status === 'Approved'}
-                className={`block w-full px-3 py-2 text-left text-sm ${
-                  selectedActionRecord?.status === 'Approved'
-                    ? 'cursor-not-allowed text-emerald-300'
-                    : 'text-emerald-600 hover:bg-emerald-50'
-                }`}
+                className="block w-full px-3 py-2 text-left text-sm text-emerald-600 hover:bg-emerald-50"
               >
                 Approve
               </button>

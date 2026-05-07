@@ -6,6 +6,7 @@ import { ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
 type ExpenseStatus = 'Pending' | 'Approved'
 type UserRole = 'Admin' | 'Managment' | 'Viewer'
+type AdminAccess = 'All Access' | 'Edit and Delete' | 'Approvals Only'
 
 interface LocationOption {
   id: number
@@ -52,6 +53,7 @@ interface CurrentUserContext {
   id: number
   role: UserRole
   user_name: string
+  admin_access: AdminAccess | null
 }
 
 interface ActionMenuState {
@@ -73,10 +75,37 @@ interface CashInHandRpcResponse {
   cash_in_hand: number
 }
 
+const canApproveRecord = (
+  status: ExpenseStatus,
+  role: UserRole | null,
+  adminAccess: AdminAccess | null
+) => role === 'Admin' && status === 'Pending' && (adminAccess === 'All Access' || adminAccess === 'Approvals Only')
+
+const canEditRecord = (
+  record: ExpenseRecord,
+  role: UserRole | null,
+  adminAccess: AdminAccess | null
+) => {
+  if (role === 'Admin') {
+    if (adminAccess === 'Approvals Only') return false
+    if (adminAccess === 'Edit and Delete') return record.status === 'Pending'
+    return true
+  }
+
+  return record.status !== 'Approved'
+}
+
+const canDeleteRecord = (
+  record: ExpenseRecord,
+  role: UserRole | null,
+  adminAccess: AdminAccess | null
+) => canEditRecord(record, role, adminAccess)
+
 let expensesPageCache: {
   hydrated: boolean
   currentUserName: string
   currentUserRole: UserRole | null
+  currentUserAdminAccess: AdminAccess | null
   userOptions: string[]
   locations: LocationOption[]
   categories: CategoryOption[]
@@ -89,6 +118,7 @@ let expensesPageCache: {
   hydrated: false,
   currentUserName: '',
   currentUserRole: null,
+  currentUserAdminAccess: null,
   userOptions: [],
   locations: [],
   categories: [],
@@ -131,6 +161,7 @@ export default function ExpensesPage() {
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false)
   const [currentUserName, setCurrentUserName] = useState('')
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null)
+  const [currentUserAdminAccess, setCurrentUserAdminAccess] = useState<AdminAccess | null>(null)
   const [userOptions, setUserOptions] = useState<string[]>([])
   const [records, setRecords] = useState<ExpenseRecord[]>([])
   const [locations, setLocations] = useState<LocationOption[]>([])
@@ -188,6 +219,7 @@ export default function ExpensesPage() {
     if (!currentEmail) {
       setLocations([])
       setCurrentUserRole(null)
+      setCurrentUserAdminAccess(null)
       setCurrentUserName('')
       return null
     }
@@ -195,20 +227,22 @@ export default function ExpensesPage() {
 
     const { data: currentUser, error: currentUserError } = await supabase
       .from('users')
-      .select('id, role, user_name')
+      .select('id, role, user_name, admin_access')
       .eq('user_email', currentEmail)
-      .single<{ id: number; role: UserRole; user_name: string }>()
+      .single<{ id: number; role: UserRole; user_name: string; admin_access: AdminAccess | null }>()
 
     if (currentUserError || !currentUser) {
       setErrorMessage(currentUserError?.message ?? 'User not found.')
       setLocations([])
       setUserOptions([])
       setCurrentUserRole(null)
+      setCurrentUserAdminAccess(null)
       setCurrentUserName('')
       return null
     }
 
     setCurrentUserRole(currentUser.role)
+    setCurrentUserAdminAccess(currentUser.admin_access)
     setCurrentUserName(currentUser.user_name)
 
     if (currentUser.role === 'Admin') {
@@ -362,6 +396,7 @@ export default function ExpensesPage() {
     if (expensesPageCache.hydrated) {
       setCurrentUserName(expensesPageCache.currentUserName)
       setCurrentUserRole(expensesPageCache.currentUserRole)
+      setCurrentUserAdminAccess(expensesPageCache.currentUserAdminAccess)
       setUserOptions(expensesPageCache.userOptions)
       setLocations(expensesPageCache.locations)
       setCategories(expensesPageCache.categories)
@@ -383,6 +418,7 @@ export default function ExpensesPage() {
       hydrated: Boolean(currentUserEmail || records.length > 0),
       currentUserName,
       currentUserRole,
+      currentUserAdminAccess,
       userOptions,
       locations,
       categories,
@@ -395,6 +431,7 @@ export default function ExpensesPage() {
   }, [
     currentUserName,
     currentUserRole,
+    currentUserAdminAccess,
     userOptions,
     locations,
     categories,
@@ -609,8 +646,8 @@ export default function ExpensesPage() {
         setIsSaving(false)
         return
       }
-      if (currentUserRole !== 'Admin' && editingRecord.status === 'Approved') {
-        setFormErrorMessage('Approved expenses cannot be edited.')
+      if (!canEditRecord(editingRecord, currentUserRole, currentUserAdminAccess)) {
+        setFormErrorMessage('You do not have access to edit this expense.')
         setIsSaving(false)
         setIsModalOpen(false)
         return
@@ -687,8 +724,8 @@ export default function ExpensesPage() {
       setIsDeleting(false)
       return
     }
-    if (currentUserRole !== 'Admin' && targetRecord.status === 'Approved') {
-      setErrorMessage('Approved expenses cannot be deleted.')
+    if (!canDeleteRecord(targetRecord, currentUserRole, currentUserAdminAccess)) {
+      setErrorMessage('You do not have access to delete this expense.')
       setDeleteRecordId(null)
       setIsDeleting(false)
       return
@@ -710,8 +747,9 @@ export default function ExpensesPage() {
 
   const handleApproveConfirm = async () => {
     if (approveRecordId === null) return
-    if (currentUserRole !== 'Admin') {
-      setErrorMessage('Only Admin can approve expenses.')
+    const targetRecord = records.find((record) => record.id === approveRecordId)
+    if (!targetRecord || !canApproveRecord(targetRecord.status, currentUserRole, currentUserAdminAccess)) {
+      setErrorMessage('You do not have access to approve this expense.')
       setApproveRecordId(null)
       return
     }
@@ -815,7 +853,9 @@ export default function ExpensesPage() {
     ? records.find((record) => record.id === actionMenu.recordId) ?? null
     : null
   const isEditDeleteBlockedForCurrentUser =
-    selectedActionRecord?.status === 'Approved' && currentUserRole !== 'Admin'
+    selectedActionRecord
+      ? !canEditRecord(selectedActionRecord, currentUserRole, currentUserAdminAccess)
+      : false
   const selectedViewRecord = viewRecordId
     ? records.find((record) => record.id === viewRecordId) ?? null
     : null
@@ -1263,7 +1303,9 @@ export default function ExpensesPage() {
           </div>
         ) : (
           records.map((record) => {
-            const isLockedForNonAdmin = currentUserRole !== 'Admin' && record.status === 'Approved'
+            const canRecordApprove = canApproveRecord(record.status, currentUserRole, currentUserAdminAccess)
+            const canRecordEdit = canEditRecord(record, currentUserRole, currentUserAdminAccess)
+            const canRecordDelete = canDeleteRecord(record, currentUserRole, currentUserAdminAccess)
 
             return (
               <div
@@ -1334,20 +1376,14 @@ export default function ExpensesPage() {
                         onClick={(event) => event.stopPropagation()}
                         className="absolute right-0 top-10 z-20 min-w-[140px] rounded-md border bg-white py-1 shadow-lg"
                       >
-                        {currentUserRole === 'Admin' ? (
+                        {canRecordApprove ? (
                           <button
                             type="button"
                             onClick={() => {
-                              if (record.status === 'Approved') return
                               setApproveRecordId(record.id)
                               setMobileActionMenuId(null)
                             }}
-                            disabled={record.status === 'Approved'}
-                            className={`block w-full px-3 py-2 text-left text-sm ${
-                              record.status === 'Approved'
-                                ? 'cursor-not-allowed text-emerald-300'
-                                : 'text-emerald-600 hover:bg-emerald-50'
-                            }`}
+                            className="block w-full px-3 py-2 text-left text-sm text-emerald-600 hover:bg-emerald-50"
                           >
                             Approve
                           </button>
@@ -1362,7 +1398,7 @@ export default function ExpensesPage() {
                         >
                           View
                         </button>
-                        {!isLockedForNonAdmin ? (
+                        {canRecordEdit ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -1374,7 +1410,7 @@ export default function ExpensesPage() {
                             Edit
                           </button>
                         ) : null}
-                        {!isLockedForNonAdmin ? (
+                        {canRecordDelete ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -1447,20 +1483,19 @@ export default function ExpensesPage() {
               transform: `translate(-100%, ${actionMenu.openUp ? '-100%' : '0'})`,
             }}
           >
-            {currentUserRole === 'Admin' ? (
+            {canApproveRecord(
+              selectedActionRecord?.status ?? 'Approved',
+              currentUserRole,
+              currentUserAdminAccess
+            ) ? (
               <button
                 type="button"
                 onClick={() => {
-                  if (!selectedActionRecord || selectedActionRecord.status === 'Approved') return
+                  if (!selectedActionRecord) return
                   setApproveRecordId(actionMenu.recordId)
                   setActionMenu(null)
                 }}
-                disabled={selectedActionRecord?.status === 'Approved'}
-                className={`block w-full px-3 py-2 text-left text-sm ${
-                  selectedActionRecord?.status === 'Approved'
-                    ? 'cursor-not-allowed text-emerald-300'
-                    : 'text-emerald-600 hover:bg-emerald-50'
-                }`}
+                className="block w-full px-3 py-2 text-left text-sm text-emerald-600 hover:bg-emerald-50"
               >
                 Approve
               </button>

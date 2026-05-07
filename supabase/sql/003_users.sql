@@ -8,13 +8,17 @@ create table if not exists public.users (
   user_password text not null,
   status text not null default 'Active',
   role text not null default 'Viewer',
+  admin_access text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint users_name_not_empty check (char_length(trim(user_name)) > 0),
   constraint users_email_not_empty check (char_length(trim(user_email)) > 0),
   constraint users_password_not_empty check (char_length(trim(user_password)) > 0),
   constraint users_status_check check (status in ('Active', 'In-active')),
-  constraint users_role_check check (role in ('Admin', 'Managment', 'Viewer'))
+  constraint users_role_check check (role in ('Admin', 'Managment', 'Viewer')),
+  constraint users_admin_access_check check (
+    admin_access is null or admin_access in ('All Access', 'Edit and Delete', 'Approvals Only')
+  )
 );
 
 create unique index if not exists users_email_unique_idx
