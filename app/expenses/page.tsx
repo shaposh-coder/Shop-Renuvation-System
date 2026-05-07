@@ -37,6 +37,7 @@ interface ExpenseRecord {
   location_id: number
   category_id: number
   status: ExpenseStatus
+  attachment_urls: string[]
   locations: ExpenseLocationRelation | ExpenseLocationRelation[] | null
   categories: ExpenseCategoryRelation | ExpenseCategoryRelation[] | null
 }
@@ -135,6 +136,8 @@ export default function ExpensesPage() {
   const [userName, setUserName] = useState('')
   const [entryDate, setEntryDate] = useState(getTodayDateInputValue())
   const [narration, setNarration] = useState('')
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [existingAttachmentUrls, setExistingAttachmentUrls] = useState<string[]>([])
   const [expenseValue, setExpenseValue] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
@@ -355,7 +358,12 @@ export default function ExpensesPage() {
     }
 
     const rpcPayload = (data ?? {}) as Partial<ExpensesRpcResponse>
-    setRecords(Array.isArray(rpcPayload.records) ? rpcPayload.records : [])
+    setRecords(
+      (Array.isArray(rpcPayload.records) ? rpcPayload.records : []).map((record) => ({
+        ...record,
+        attachment_urls: Array.isArray(record.attachment_urls) ? record.attachment_urls : [],
+      }))
+    )
     setTotalCount(typeof rpcPayload.total_count === 'number' ? rpcPayload.total_count : 0)
   }
 
@@ -557,6 +565,8 @@ export default function ExpensesPage() {
     setEntryDate(getTodayDateInputValue())
     setNarration('')
     setExpenseValue('')
+    setSelectedFiles([])
+    setExistingAttachmentUrls([])
     setLocationId('')
     setLocationSearchTerm('')
     setIsLocationDropdownOpen(false)
@@ -587,6 +597,8 @@ export default function ExpensesPage() {
     setEntryDate(record.entry_date ?? getTodayDateInputValue())
     setNarration(record.narration)
     setExpenseValue(record.expense_value.toString())
+    setSelectedFiles([])
+    setExistingAttachmentUrls(record.attachment_urls ?? [])
     setLocationId(record.location_id)
     setLocationSearchTerm('')
     setIsLocationDropdownOpen(false)
@@ -620,6 +632,32 @@ export default function ExpensesPage() {
     }
 
     setIsSaving(true)
+    const uploadAttachments = async (recordId: number) => {
+      if (selectedFiles.length === 0) return []
+
+      const uploadedUrls: string[] = []
+
+      for (const file of selectedFiles) {
+        const extension = file.name.includes('.') ? file.name.split('.').pop() : ''
+        const filePath = `expenses/${recordId}/${Date.now()}-${Math.random().toString(36).slice(2)}${
+          extension ? `.${extension}` : ''
+        }`
+
+        const { error: uploadError } = await supabase.storage
+          .from('rms-entry-attachments')
+          .upload(filePath, file)
+
+        if (uploadError) {
+          throw new Error(uploadError.message)
+        }
+
+        const { data } = supabase.storage.from('rms-entry-attachments').getPublicUrl(filePath)
+        uploadedUrls.push(data.publicUrl)
+      }
+
+      return uploadedUrls
+    }
+
     setErrorMessage(null)
     setFormErrorMessage(null)
 
@@ -677,10 +715,11 @@ export default function ExpensesPage() {
           expense_value: numericExpenseValue,
           location_id: locationId,
           category_id: categoryId,
+          attachment_urls: existingAttachmentUrls,
         })
         .eq('id', editingRecordId)
         .select(
-          'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
+          'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, attachment_urls, locations(id, shop_name), categories(id, name)'
         )
         .single()
 
@@ -690,7 +729,46 @@ export default function ExpensesPage() {
         return
       }
 
-      setRecords((prev) => prev.map((record) => (record.id === editingRecordId ? (data as ExpenseRecord) : record)))
+      try {
+        const uploadedUrls = await uploadAttachments(editingRecordId)
+        const mergedAttachmentUrls = [...existingAttachmentUrls, ...uploadedUrls]
+
+        if (uploadedUrls.length > 0) {
+          const { data: updatedRecord, error: attachmentUpdateError } = await supabase
+            .from('expenses')
+            .update({ attachment_urls: mergedAttachmentUrls })
+            .eq('id', editingRecordId)
+            .select(
+              'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, attachment_urls, locations(id, shop_name), categories(id, name)'
+            )
+            .single()
+
+          if (attachmentUpdateError) {
+            setFormErrorMessage(attachmentUpdateError.message)
+            setIsSaving(false)
+            return
+          }
+
+          setRecords((prev) =>
+            prev.map((record) => (record.id === editingRecordId ? (updatedRecord as ExpenseRecord) : record))
+          )
+        } else {
+          setRecords((prev) =>
+            prev.map((record) =>
+              record.id === editingRecordId
+                ? {
+                    ...(data as ExpenseRecord),
+                    attachment_urls: existingAttachmentUrls,
+                  }
+                : record
+            )
+          )
+        }
+      } catch (uploadError) {
+        setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
+        setIsSaving(false)
+        return
+      }
     } else {
       const { data, error } = await supabase
         .from('expenses')
@@ -702,14 +780,37 @@ export default function ExpensesPage() {
           location_id: locationId,
           category_id: categoryId,
           status: 'Pending',
+          attachment_urls: [],
         })
         .select(
-          'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
+          'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, attachment_urls, locations(id, shop_name), categories(id, name)'
         )
         .single()
 
       if (error) {
         setFormErrorMessage(error.message)
+        setIsSaving(false)
+        return
+      }
+
+      try {
+        const insertedRecordId = (data as ExpenseRecord).id
+        const uploadedUrls = await uploadAttachments(insertedRecordId)
+
+        if (uploadedUrls.length > 0) {
+          const { error: attachmentUpdateError } = await supabase
+            .from('expenses')
+            .update({ attachment_urls: uploadedUrls })
+            .eq('id', insertedRecordId)
+
+          if (attachmentUpdateError) {
+            setFormErrorMessage(attachmentUpdateError.message)
+            setIsSaving(false)
+            return
+          }
+        }
+      } catch (uploadError) {
+        setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
         setIsSaving(false)
         return
       }
@@ -777,7 +878,7 @@ export default function ExpensesPage() {
       .update({ status: 'Approved' })
       .eq('id', approveRecordId)
       .select(
-        'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, locations(id, shop_name), categories(id, name)'
+        'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, attachment_urls, locations(id, shop_name), categories(id, name)'
       )
       .single()
 
@@ -1617,6 +1718,44 @@ export default function ExpensesPage() {
               </div>
 
               <div>
+                <label htmlFor="expense-attachments" className="mb-1 block text-sm font-medium text-gray-700">
+                  Attachments
+                </label>
+                <input
+                  id="expense-attachments"
+                  type="file"
+                  multiple
+                  onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                />
+                {existingAttachmentUrls.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {existingAttachmentUrls.map((url) => (
+                      <div key={url} className="flex items-center justify-between gap-2">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate text-xs text-blue-600 hover:underline"
+                        >
+                          {url.split('/').pop() ?? 'Attachment'}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExistingAttachmentUrls((prev) => prev.filter((item) => item !== url))
+                          }
+                          className="text-xs font-semibold text-red-600 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
                 <label htmlFor="expense-entry-date" className="mb-1 block text-sm font-medium text-gray-700">
                   Entry Date
                 </label>
@@ -1934,6 +2073,26 @@ export default function ExpensesPage() {
                 >
                   {selectedViewRecord.status}
                 </span>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Attachments</p>
+                {selectedViewRecord.attachment_urls.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {selectedViewRecord.attachment_urls.map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block truncate text-sm text-blue-600 hover:underline"
+                      >
+                        {url.split('/').pop() ?? 'Attachment'}
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-800">No attachments.</p>
+                )}
               </div>
               <div className="flex justify-end border-t pt-4">
                 <button

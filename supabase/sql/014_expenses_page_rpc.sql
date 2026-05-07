@@ -45,6 +45,7 @@ begin
       e.location_id,
       e.category_id,
       e.status,
+      coalesce(e.attachment_urls, '[]'::jsonb) as attachment_urls,
       l.id as location_ref_id,
       l.shop_name as location_shop_name,
       c.id as category_ref_id,
@@ -101,6 +102,7 @@ begin
       e.location_id,
       e.category_id,
       e.status,
+      coalesce(e.attachment_urls, '[]'::jsonb) as attachment_urls,
       l.id as location_ref_id,
       l.shop_name as location_shop_name,
       c.id as category_ref_id,
@@ -160,6 +162,7 @@ begin
           'location_id', f.location_id,
           'category_id', f.category_id,
           'status', f.status,
+          'attachment_urls', f.attachment_urls,
           'locations',
           case
             when f.location_ref_id is null then null

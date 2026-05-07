@@ -43,6 +43,7 @@ begin
       cr.cash_value,
       cr.location_id,
       cr.status,
+      coalesce(cr.attachment_urls, '[]'::jsonb) as attachment_urls,
       l.id as location_ref_id,
       l.shop_name as location_shop_name
     from public.cash_records cr
@@ -91,6 +92,7 @@ begin
       cr.cash_value,
       cr.location_id,
       cr.status,
+      coalesce(cr.attachment_urls, '[]'::jsonb) as attachment_urls,
       l.id as location_ref_id,
       l.shop_name as location_shop_name
     from public.cash_records cr
@@ -142,6 +144,7 @@ begin
           'cash_value', f.cash_value,
           'location_id', f.location_id,
           'status', f.status,
+          'attachment_urls', f.attachment_urls,
           'locations',
           case
             when f.location_ref_id is null then null

@@ -22,6 +22,7 @@ Is folder me saari SQL files ordered format me rakhi hui hain taake kisi bhi nay
 16. `supabase/sql/016_cash_in_hand_rpc.sql`
 17. `supabase/sql/017_admin_access_controls.sql`
 18. `supabase/sql/018_users_page_rpc_admin_access.sql`
+19. `supabase/sql/019_entry_attachments.sql`
 
 ## Kaise Run Karna Hai
 
@@ -34,4 +35,4 @@ Is folder me saari SQL files ordered format me rakhi hui hain taake kisi bhi nay
 
 - Files idempotent style me likhi gayi hain (`if not exists`, `drop ... if exists`) taake rerun safe rahe.
 - Future DB changes ke liye nayi numbered file add karein:
-- `018_*.sql`, `019_*.sql`, etc.
+- `019_*.sql`, `020_*.sql`, etc.
