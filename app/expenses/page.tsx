@@ -328,7 +328,7 @@ export default function ExpensesPage() {
   const fetchCurrentUserCashInHand = async () => {
     const currentEmail = getCurrentUserEmail()
     if (!currentEmail) {
-      return { cashInHand: 0, error: 'Unable to find current user session.' }
+      return { cashInHand: 0, pendingExpenses: 0, error: 'Unable to find current user session.' }
     }
 
     const { data, error } = await supabase.rpc('get_cash_in_hand_value', {
