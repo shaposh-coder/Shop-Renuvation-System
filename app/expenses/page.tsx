@@ -359,14 +359,31 @@ export default function ExpensesPage() {
     setTotalCount(typeof rpcPayload.total_count === 'number' ? rpcPayload.total_count : 0)
   }
 
-  const fetchCurrentUserCashInHand = async () => {
-    const currentEmail = getCurrentUserEmail()
-    if (!currentEmail) {
-      return { cashInHand: 0, pendingExpenses: 0, error: 'Unable to find current user session.' }
+  const fetchCashInHandForEntry = async (targetUserName: string) => {
+    let targetEmail = ''
+
+    if (currentUserRole === 'Admin') {
+      const { data: targetUser, error: targetUserError } = await supabase
+        .from('users')
+        .select('user_email')
+        .eq('user_name', targetUserName)
+        .limit(1)
+        .maybeSingle<{ user_email: string }>()
+
+      if (targetUserError || !targetUser?.user_email) {
+        return { cashInHand: 0, pendingExpenses: 0, error: 'Selected user account was not found.' }
+      }
+
+      targetEmail = targetUser.user_email
+    } else {
+      targetEmail = getCurrentUserEmail()
+      if (!targetEmail) {
+        return { cashInHand: 0, pendingExpenses: 0, error: 'Unable to find current user session.' }
+      }
     }
 
     const { data, error } = await supabase.rpc('get_cash_in_hand_value', {
-      p_user_email: currentEmail,
+      p_user_email: targetEmail,
     })
 
     if (error) {
@@ -615,28 +632,26 @@ export default function ExpensesPage() {
       return
     }
 
-    if (currentUserRole !== 'Admin') {
-      const { cashInHand, pendingExpenses, error } = await fetchCurrentUserCashInHand()
-      if (error) {
-        setFormErrorMessage(error)
-        setIsSaving(false)
-        return
-      }
+    const { cashInHand, pendingExpenses, error } = await fetchCashInHandForEntry(effectiveUserName)
+    if (error) {
+      setFormErrorMessage(error)
+      setIsSaving(false)
+      return
+    }
 
-      let availableNetCash = cashInHand - pendingExpenses
+    let availableNetCash = cashInHand - pendingExpenses
 
-      // While editing an existing pending record, add its old value back to avoid false limit block.
-      if (editingRecordForLimit?.status === 'Pending') {
-        availableNetCash += Number(editingRecordForLimit.expense_value ?? 0)
-      }
+    // While editing an existing pending record, add its old value back to avoid false limit block.
+    if (editingRecordForLimit?.status === 'Pending') {
+      availableNetCash += Number(editingRecordForLimit.expense_value ?? 0)
+    }
 
-      if (numericExpenseValue > availableNetCash) {
-        setFormErrorMessage(
-          `Expense value cannot exceed your Net Cash in Hand (${formatCurrency(availableNetCash)}).`
-        )
-        setIsSaving(false)
-        return
-      }
+    if (numericExpenseValue > availableNetCash) {
+      setFormErrorMessage(
+        `Expense value cannot exceed Net Cash in Hand (${formatCurrency(availableNetCash)}).`
+      )
+      setIsSaving(false)
+      return
     }
 
     if (editingRecordId !== null) {
