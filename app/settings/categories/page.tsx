@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { MoreVertical } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface Category {
   id: number
@@ -15,6 +16,7 @@ interface CategoriesPageRpcResponse {
 }
 
 export default function SettingsCategoriesPage() {
+  const router = useRouter()
   const ITEMS_PER_PAGE = 25
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -52,9 +54,21 @@ export default function SettingsCategoriesPage() {
 
   useEffect(() => {
     if (hasFetchedOnceRef.current) return
+    const roleCookie = document.cookie
+      .split('; ')
+      .find((entry) => entry.startsWith('rms_user_role='))
+    const roleValue = roleCookie
+      ? decodeURIComponent(roleCookie.split('=')[1] ?? '')
+      : (localStorage.getItem('rms_user_role') ?? '')
+
+    if (roleValue !== 'Admin') {
+      router.replace('/dashboard')
+      return
+    }
+
     hasFetchedOnceRef.current = true
     fetchCategories()
-  }, [])
+  }, [router])
 
   const handleAddOrUpdateCategory = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

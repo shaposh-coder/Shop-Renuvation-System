@@ -75,7 +75,11 @@ export default function Sidebar() {
         return {
           ...item,
           subItems: item.subItems.filter((subItem) =>
-            subItem.path === '/settings/users' ? isAdminUser : true
+            subItem.path === '/settings/users' ||
+            subItem.path === '/settings/categories' ||
+            subItem.path === '/settings/location'
+              ? isAdminUser
+              : true
           ),
         }
       }),
