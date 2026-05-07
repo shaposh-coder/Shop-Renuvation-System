@@ -214,9 +214,9 @@ export default function SettingsUsersPage() {
       }
 
       const { data, error } = await supabase
-        .from('users')
+            .from('users')
         .update(updatePayload)
-        .eq('id', editingUserId)
+            .eq('id', editingUserId)
         .select('id, user_name, user_email, status, role')
         .single()
 
@@ -225,8 +225,8 @@ export default function SettingsUsersPage() {
           error.code === '23505' ? 'User email already exists. Please use a different email.' : error.message
         )
         setIsSaving(false)
-        return
-      }
+            return
+          }
 
       const mappingError = await saveUserLocations(editingUserId, effectiveLocationIds)
       if (mappingError) {
@@ -324,17 +324,17 @@ export default function SettingsUsersPage() {
   const isUserPasswordInvalid =
     showValidation && editingUserId === null && userPassword.trim().length === 0
 
-  return (
+    return (
     <div className="p-4 md:p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Users</h1>
-        <button
+              <button
           type="button"
           onClick={openAddModal}
           className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
         >
           Add User
-        </button>
+              </button>
       </div>
 
       {errorMessage ? (
@@ -379,17 +379,17 @@ export default function SettingsUsersPage() {
                     <td className="px-4 py-3 text-sm text-gray-700">{user.status}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{user.role}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      <button
+              <button
                         type="button"
                         onClick={() => setLocationsPopupUser(user)}
                         className="text-blue-600 hover:text-blue-700 hover:underline"
                       >
                         {`${user.location_names.length} locations`}
-                      </button>
+              </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       <div className="flex flex-wrap gap-2">
-                        <button
+              <button
                           type="button"
                           onClick={() => openEditModal(user)}
                           className="rounded-md border border-blue-600 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
@@ -402,16 +402,16 @@ export default function SettingsUsersPage() {
                           className="rounded-md border border-red-600 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
                         >
                           Delete
-                        </button>
-                      </div>
+              </button>
+            </div>
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+          </div>
         </div>
-      </div>
 
       <div className="mt-6 space-y-3 md:hidden">
         {isLoading ? (
@@ -492,8 +492,8 @@ export default function SettingsUsersPage() {
               </div>
             </div>
           ))
-        )}
-      </div>
+                  )}
+                </div>
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -513,13 +513,13 @@ export default function SettingsUsersPage() {
             </div>
 
             <form onSubmit={handleAddOrUpdateUser} className="space-y-4 px-4 py-4 md:px-5 md:py-5">
-              <div>
+                <div>
                 <label htmlFor="user-name" className="mb-1 block text-sm font-medium text-gray-700">
                   User Name
-                </label>
-                <input
+                  </label>
+                  <input
                   id="user-name"
-                  type="text"
+                    type="text"
                   value={userName}
                   onChange={(event) => setUserName(event.target.value)}
                   placeholder="Enter user name"
@@ -527,18 +527,18 @@ export default function SettingsUsersPage() {
                     isUserNameInvalid
                       ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
                       : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                  }`}
-                />
+                    }`}
+                  />
                 {isUserNameInvalid ? (
                   <p className="mt-1 text-xs font-medium text-red-600">User Name is required.</p>
                 ) : null}
-              </div>
+                </div>
 
-              <div>
+                <div>
                 <label htmlFor="user-email" className="mb-1 block text-sm font-medium text-gray-700">
                   User Email
-                </label>
-                <input
+                  </label>
+                  <input
                   id="user-email"
                   type="email"
                   value={userEmail}
@@ -553,12 +553,12 @@ export default function SettingsUsersPage() {
                 {isUserEmailInvalid ? (
                   <p className="mt-1 text-xs font-medium text-red-600">User Email is required.</p>
                 ) : null}
-              </div>
+                </div>
 
-              <div>
+                <div>
                 <label htmlFor="user-password" className="mb-1 block text-sm font-medium text-gray-700">
                   Password
-                </label>
+                  </label>
                 <div className="relative">
                   <input
                     id="user-password"
@@ -588,7 +588,7 @@ export default function SettingsUsersPage() {
                 {isUserPasswordInvalid ? (
                   <p className="mt-1 text-xs font-medium text-red-600">Password is required.</p>
                 ) : null}
-              </div>
+                </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
@@ -620,9 +620,9 @@ export default function SettingsUsersPage() {
                     <option value="Viewer">Viewer</option>
                   </select>
                 </div>
-              </div>
+                </div>
 
-              <div>
+                <div>
                 <p className="mb-2 block text-sm font-medium text-gray-700">Locations</p>
                 {isLocationsSelectionDisabled ? (
                   <p className="mb-2 text-xs font-medium text-gray-500">
@@ -653,7 +653,7 @@ export default function SettingsUsersPage() {
                         {selectedLocationIds.length > 0
                           ? `${selectedLocationIds.length} location(s) selected`
                           : 'Select locations'}
-                      </span>
+                    </span>
                       <ChevronDown className="h-4 w-4 text-gray-500" />
                     </button>
 
@@ -682,10 +682,10 @@ export default function SettingsUsersPage() {
                                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                               />
                               <span>{location.shop_name}</span>
-                            </label>
+                  </label>
                           ))
                         )}
-                      </div>
+                </div>
                     ) : null}
                   </div>
                 )}
@@ -706,9 +706,9 @@ export default function SettingsUsersPage() {
                 >
                   {isSaving ? 'Saving...' : editingUserId !== null ? 'Update User' : 'Save User'}
                 </button>
-              </div>
+                </div>
             </form>
-          </div>
+              </div>
         </div>
       ) : null}
 
@@ -717,7 +717,7 @@ export default function SettingsUsersPage() {
           <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
             <div className="border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Delete User</h2>
-            </div>
+                </div>
             <div className="px-4 py-4 md:px-5 md:py-5">
               <p className="text-sm text-gray-700">
                 Are you sure you want to delete this user? This action cannot be undone.
@@ -739,8 +739,8 @@ export default function SettingsUsersPage() {
                   {isDeleting ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
-            </div>
-          </div>
+                </div>
+              </div>
         </div>
       ) : null}
 
@@ -757,7 +757,7 @@ export default function SettingsUsersPage() {
               >
                 X
               </button>
-            </div>
+                </div>
             <div className="space-y-4 px-4 py-4 md:px-5 md:py-5">
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Name</p>
@@ -766,7 +766,7 @@ export default function SettingsUsersPage() {
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Email</p>
                 <p className="mt-1 text-sm text-gray-800">{selectedUser.user_email}</p>
-              </div>
+                </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status / Role</p>
                 <p className="mt-1 text-sm text-gray-800">
@@ -783,13 +783,13 @@ export default function SettingsUsersPage() {
                         className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800"
                       >
                         {locationName}
-                      </div>
+                </div>
                     ))}
-                  </div>
+              </div>
                 ) : (
                   <p className="mt-1 text-sm text-gray-800">-</p>
                 )}
-              </div>
+                </div>
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
@@ -807,8 +807,8 @@ export default function SettingsUsersPage() {
                 </button>
               </div>
             </div>
-          </div>
         </div>
+      </div>
       ) : null}
 
       {locationsPopupUser ? (
@@ -816,20 +816,20 @@ export default function SettingsUsersPage() {
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Assigned Locations</h2>
-              <button
+          <button
                 type="button"
                 onClick={() => setLocationsPopupUser(null)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-lg font-semibold leading-none text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                 aria-label="Close locations modal"
               >
                 X
-              </button>
-            </div>
+          </button>
+        </div>
             <div className="space-y-3 px-4 py-4 md:px-5 md:py-5">
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User</p>
                 <p className="mt-1 text-sm font-semibold text-gray-900">{locationsPopupUser.user_name}</p>
-              </div>
+            </div>
 
               <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200">
                 {locationsPopupUser.location_names.length === 0 ? (
@@ -846,19 +846,19 @@ export default function SettingsUsersPage() {
                     ))}
                   </div>
                 )}
-              </div>
+                        </div>
 
               <div className="flex justify-end border-t pt-4">
-                <button
+                          <button
                   type="button"
                   onClick={() => setLocationsPopupUser(null)}
                   className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Close
-                </button>
-              </div>
-            </div>
-          </div>
+                          </button>
+                        </div>
+        </div>
+      </div>
         </div>
       ) : null}
     </div>

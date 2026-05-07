@@ -92,8 +92,12 @@ export default function CashRecordsPage() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filterUserName, setFilterUserName] = useState('')
+  const [isFilterUserDropdownOpen, setIsFilterUserDropdownOpen] = useState(false)
+  const [filterUserSearchTerm, setFilterUserSearchTerm] = useState('')
   const [filterLocationId, setFilterLocationId] = useState<number | ''>('')
   const [filterLocationInput, setFilterLocationInput] = useState('')
+  const [isFilterLocationDropdownOpen, setIsFilterLocationDropdownOpen] = useState(false)
+  const [filterLocationSearchTerm, setFilterLocationSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<CashRecordStatus | ''>('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
@@ -398,6 +402,8 @@ export default function CashRecordsPage() {
       if (!isFilterOpen) return
       if (filterPopoverRef.current && !filterPopoverRef.current.contains(event.target as Node)) {
         setIsFilterOpen(false)
+        setIsFilterUserDropdownOpen(false)
+        setIsFilterLocationDropdownOpen(false)
       }
     }
 
@@ -649,6 +655,18 @@ export default function CashRecordsPage() {
         )
   const selectedLocationLabel =
     locations.find((location) => location.id === locationId)?.shop_name ?? 'Select location'
+  const filteredFilterUserOptions =
+    filterUserSearchTerm.trim().length === 0
+      ? userOptions
+      : userOptions.filter((name) =>
+          name.toLowerCase().includes(filterUserSearchTerm.trim().toLowerCase())
+        )
+  const filteredFilterLocationOptions =
+    filterLocationSearchTerm.trim().length === 0
+      ? locations
+      : locations.filter((location) =>
+          location.shop_name.toLowerCase().includes(filterLocationSearchTerm.trim().toLowerCase())
+        )
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE))
   const showRecordsLoading = (isLoading || isRecordsLoading) && records.length === 0
   const selectedActionRecord = actionMenu
@@ -720,18 +738,66 @@ export default function CashRecordsPage() {
                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                       User Name
                     </label>
-                    <input
-                      list="cash-filter-users"
-                      value={filterUserName}
-                      onChange={(event) => setFilterUserName(event.target.value)}
-                      placeholder="Search user..."
-                      className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    />
-                    <datalist id="cash-filter-users">
-                      {userOptions.map((name) => (
-                        <option key={name} value={name} />
-                      ))}
-                    </datalist>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsFilterUserDropdownOpen((prev) => !prev)
+                          setFilterUserSearchTerm('')
+                        }}
+                        className="flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      >
+                        <span className="truncate text-left">{filterUserName || 'All Users'}</span>
+                        <ChevronDown className="h-4 w-4 text-gray-500" />
+                      </button>
+
+                      {isFilterUserDropdownOpen ? (
+                        <div className="absolute left-0 top-full z-40 mt-1 w-full rounded-md border border-gray-300 bg-white p-2 shadow-lg">
+                          <input
+                            type="text"
+                            value={filterUserSearchTerm}
+                            onChange={(event) => setFilterUserSearchTerm(event.target.value)}
+                            placeholder="Search user..."
+                            className="mb-2 w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFilterUserName('')
+                              setIsFilterUserDropdownOpen(false)
+                            }}
+                            className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
+                              !filterUserName
+                                ? 'bg-blue-50 font-medium text-blue-700'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            All Users
+                          </button>
+                          {filteredFilterUserOptions.length === 0 ? (
+                            <p className="px-2 py-2 text-sm text-gray-500">No user found.</p>
+                          ) : (
+                            filteredFilterUserOptions.map((name) => (
+                              <button
+                                key={name}
+                                type="button"
+                                onClick={() => {
+                                  setFilterUserName(name)
+                                  setIsFilterUserDropdownOpen(false)
+                                }}
+                                className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
+                                  filterUserName === name
+                                    ? 'bg-blue-50 font-medium text-blue-700'
+                                    : 'text-gray-700 hover:bg-gray-50'
+                                }`}
+                              >
+                                {name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
 
@@ -759,25 +825,68 @@ export default function CashRecordsPage() {
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Location
                   </label>
-                  <input
-                    list="cash-filter-locations"
-                    value={filterLocationInput}
-                    onChange={(event) => {
-                      const value = event.target.value
-                      setFilterLocationInput(value)
-                      const matched = locations.find(
-                        (location) => location.shop_name.toLowerCase() === value.trim().toLowerCase()
-                      )
-                      setFilterLocationId(matched?.id ?? '')
-                    }}
-                    placeholder="Search location..."
-                    className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                  <datalist id="cash-filter-locations">
-                    {locations.map((location) => (
-                      <option key={location.id} value={location.shop_name} />
-                    ))}
-                  </datalist>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFilterLocationDropdownOpen((prev) => !prev)
+                        setFilterLocationSearchTerm('')
+                      }}
+                      className="flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    >
+                      <span className="truncate text-left">{filterLocationInput || 'All Locations'}</span>
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    </button>
+
+                    {isFilterLocationDropdownOpen ? (
+                      <div className="absolute left-0 top-full z-40 mt-1 w-full rounded-md border border-gray-300 bg-white p-2 shadow-lg">
+                        <input
+                          type="text"
+                          value={filterLocationSearchTerm}
+                          onChange={(event) => setFilterLocationSearchTerm(event.target.value)}
+                          placeholder="Search location..."
+                          className="mb-2 w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFilterLocationId('')
+                            setFilterLocationInput('')
+                            setIsFilterLocationDropdownOpen(false)
+                          }}
+                          className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
+                            !filterLocationId
+                              ? 'bg-blue-50 font-medium text-blue-700'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          All Locations
+                        </button>
+                        {filteredFilterLocationOptions.length === 0 ? (
+                          <p className="px-2 py-2 text-sm text-gray-500">No location found.</p>
+                        ) : (
+                          filteredFilterLocationOptions.map((location) => (
+                            <button
+                              key={location.id}
+                              type="button"
+                              onClick={() => {
+                                setFilterLocationId(location.id)
+                                setFilterLocationInput(location.shop_name)
+                                setIsFilterLocationDropdownOpen(false)
+                              }}
+                              className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
+                                filterLocationId === location.id
+                                  ? 'bg-blue-50 font-medium text-blue-700'
+                                  : 'text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              {location.shop_name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div>
@@ -800,8 +909,12 @@ export default function CashRecordsPage() {
                     type="button"
                     onClick={() => {
                       setFilterUserName('')
+                      setIsFilterUserDropdownOpen(false)
+                      setFilterUserSearchTerm('')
                       setFilterLocationId('')
                       setFilterLocationInput('')
+                      setIsFilterLocationDropdownOpen(false)
+                      setFilterLocationSearchTerm('')
                       setFilterStatus('')
                       setFilterDateFrom('')
                       setFilterDateTo('')
@@ -812,7 +925,11 @@ export default function CashRecordsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsFilterOpen(false)}
+                    onClick={() => {
+                      setIsFilterOpen(false)
+                      setIsFilterUserDropdownOpen(false)
+                      setIsFilterLocationDropdownOpen(false)
+                    }}
                     className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     Apply
