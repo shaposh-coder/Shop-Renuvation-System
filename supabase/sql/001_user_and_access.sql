@@ -1,5 +1,18 @@
--- Users table for RMS app
+-- =====================================================
+-- USER + ACCESS SETUP
+-- =====================================================
+
 create extension if not exists pgcrypto;
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
 
 create table if not exists public.users (
   id bigint generated always as identity primary key,
@@ -23,16 +36,6 @@ create table if not exists public.users (
 
 create unique index if not exists users_email_unique_idx
   on public.users (lower(trim(user_email)));
-
-create or replace function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
 
 drop trigger if exists users_set_updated_at on public.users;
 create trigger users_set_updated_at
@@ -71,7 +74,14 @@ for delete
 to anon, authenticated
 using (true);
 
--- Default admin user seed
-insert into public.users (user_name, user_email, user_password, status, role)
-values ('admin', 'admin@admin.com', encode(digest('admin123', 'sha256'), 'hex'), 'Active', 'Admin')
+-- Default admin
+insert into public.users (user_name, user_email, user_password, status, role, admin_access)
+values ('admin', 'admin@admin.com', encode(digest('admin123', 'sha256'), 'hex'), 'Active', 'Admin', 'All Access')
 on conflict ((lower(trim(user_email)))) do nothing;
+
+-- Hash old plain passwords (safe rerun)
+update public.users
+set user_password = encode(digest(user_password, 'sha256'), 'hex')
+where user_password is not null
+  and user_password !~ '^[0-9a-f]{64}$';
+
