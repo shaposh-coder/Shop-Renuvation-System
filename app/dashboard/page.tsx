@@ -15,6 +15,7 @@ interface DashboardSummaryRpcResponse {
 interface CashInHandRpcResponse {
   approved_cash: number
   approved_expenses: number
+  pending_expenses: number
   cash_in_hand: number
 }
 
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [fixedNetCashInHand, setFixedNetCashInHand] = useState(0)
+  const [fixedPendingExpenses, setFixedPendingExpenses] = useState(0)
   const [isFixedNetLoading, setIsFixedNetLoading] = useState(true)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [userOptions, setUserOptions] = useState<string[]>([])
@@ -163,6 +165,7 @@ export default function DashboardPage() {
 
       if (!currentEmail) {
         setFixedNetCashInHand(0)
+        setFixedPendingExpenses(0)
         setIsFixedNetLoading(false)
         return
       }
@@ -174,12 +177,14 @@ export default function DashboardPage() {
 
       if (error) {
         setFixedNetCashInHand(0)
+        setFixedPendingExpenses(0)
         setIsFixedNetLoading(false)
         return
       }
 
       const payload = (data ?? null) as CashInHandRpcResponse | null
       setFixedNetCashInHand(payload?.cash_in_hand ?? 0)
+      setFixedPendingExpenses(payload?.pending_expenses ?? 0)
       setIsFixedNetLoading(false)
     }
 
@@ -341,24 +346,44 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-3">
+        <div className="flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Cash in Hand</p>
           <p className="mt-2 text-2xl font-bold text-gray-900">
-            {isFixedNetLoading ? 'Loading...' : formatCurrency(fixedNetCashInHand)}
+            {isFixedNetLoading ? 'Loading...' : formatCurrency(fixedNetCashInHand - fixedPendingExpenses)}
           </p>
-          <p className="mt-1 text-xs text-gray-500">
-            Calculation: Approved Cash Records - Approved Expense Records (all-time).
-          </p>
+          <p className="mt-1 text-xs text-gray-500">Cash in Hand Details</p>
+          <div className="mt-4 flex-1 space-y-2 border-t pt-3 text-sm">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Cash Value</span>
+              <span className="font-semibold text-gray-900">
+                {isFixedNetLoading ? 'Loading...' : formatCurrency(fixedNetCashInHand)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Pending Expenses</span>
+              <span className="font-semibold text-gray-900">
+                {isFixedNetLoading ? 'Loading...' : formatCurrency(fixedPendingExpenses)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between border-t pt-2 text-sm">
+              <span className="text-gray-700">Net Cash in Hand</span>
+              <span className="font-bold text-gray-900">
+                {isFixedNetLoading
+                  ? 'Loading...'
+                  : formatCurrency(fixedNetCashInHand - fixedPendingExpenses)}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Expenses</p>
           <p className="mt-2 text-2xl font-bold text-gray-900">
             {isLoading ? 'Loading...' : formatCurrency(summary?.expenses.approved ?? 0)}
           </p>
           <p className="mt-1 text-xs text-gray-500">Expenses Details</p>
-          <div className="mt-4 space-y-2 text-sm">
+          <div className="mt-4 flex-1 space-y-2 border-t pt-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Approved Expenses</span>
               <span className="font-semibold text-gray-900">
@@ -378,13 +403,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">All Cash Details</p>
           <p className="mt-2 text-2xl font-bold text-gray-900">
             {isLoading ? 'Loading...' : formatCurrency(summary?.cash.approved ?? 0)}
           </p>
           <p className="mt-1 text-xs text-gray-500">Cash Records Details</p>
-          <div className="mt-4 space-y-2 text-sm">
+          <div className="mt-4 flex-1 space-y-2 border-t pt-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Approved Cash</span>
               <span className="font-semibold text-gray-900">{formatCurrency(summary?.cash.approved ?? 0)}</span>

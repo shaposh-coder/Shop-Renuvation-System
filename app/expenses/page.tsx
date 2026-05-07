@@ -66,6 +66,12 @@ interface ExpensesRpcResponse {
   records: ExpenseRecord[]
 }
 
+interface CashInHandRpcResponse {
+  approved_cash: number
+  approved_expenses: number
+  cash_in_hand: number
+}
+
 let expensesPageCache: {
   hydrated: boolean
   currentUserName: string
@@ -141,6 +147,7 @@ export default function ExpensesPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showValidation, setShowValidation] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [currentUserContext, setCurrentUserContext] = useState<CurrentUserContext | null>(null)
@@ -317,6 +324,24 @@ export default function ExpensesPage() {
     setTotalCount(typeof rpcPayload.total_count === 'number' ? rpcPayload.total_count : 0)
   }
 
+  const fetchCurrentUserCashInHand = async () => {
+    const currentEmail = getCurrentUserEmail()
+    if (!currentEmail) {
+      return { cashInHand: 0, error: 'Unable to find current user session.' }
+    }
+
+    const { data, error } = await supabase.rpc('get_cash_in_hand_value', {
+      p_user_email: currentEmail,
+    })
+
+    if (error) {
+      return { cashInHand: 0, error: error.message }
+    }
+
+    const payload = (data ?? null) as CashInHandRpcResponse | null
+    return { cashInHand: Number(payload?.cash_in_hand ?? 0), error: null as string | null }
+  }
+
   const loadPageData = async (silent = false) => {
     if (!silent) setIsLoading(true)
     setErrorMessage(null)
@@ -485,16 +510,19 @@ export default function ExpensesPage() {
   const closeFormModal = () => {
     setIsModalOpen(false)
     setEditingRecordId(null)
+    setFormErrorMessage(null)
     resetForm()
   }
 
   const openAddModal = () => {
     setEditingRecordId(null)
+    setFormErrorMessage(null)
     resetForm()
     setIsModalOpen(true)
   }
 
   const openEditModal = (record: ExpenseRecord) => {
+    setFormErrorMessage(null)
     setEditingRecordId(record.id)
     setUserName(record.user_name)
     setEntryDate(record.entry_date ?? getTodayDateInputValue())
@@ -534,16 +562,33 @@ export default function ExpensesPage() {
 
     setIsSaving(true)
     setErrorMessage(null)
+    setFormErrorMessage(null)
+
+    if (currentUserRole !== 'Admin') {
+      const { cashInHand, error } = await fetchCurrentUserCashInHand()
+      if (error) {
+        setFormErrorMessage(error)
+        setIsSaving(false)
+        return
+      }
+      if (numericExpenseValue > cashInHand) {
+        setFormErrorMessage(
+          `Expense value cannot exceed your Cash in Hand (${formatCurrency(cashInHand)}).`
+        )
+        setIsSaving(false)
+        return
+      }
+    }
 
     if (editingRecordId !== null) {
       const editingRecord = records.find((record) => record.id === editingRecordId)
       if (!editingRecord) {
-        setErrorMessage('Expense record not found.')
+        setFormErrorMessage('Expense record not found.')
         setIsSaving(false)
         return
       }
       if (currentUserRole !== 'Admin' && editingRecord.status === 'Approved') {
-        setErrorMessage('Approved expenses cannot be edited.')
+        setFormErrorMessage('Approved expenses cannot be edited.')
         setIsSaving(false)
         setIsModalOpen(false)
         return
@@ -566,7 +611,7 @@ export default function ExpensesPage() {
         .single()
 
       if (error) {
-        setErrorMessage(error.message)
+        setFormErrorMessage(error.message)
         setIsSaving(false)
         return
       }
@@ -590,7 +635,7 @@ export default function ExpensesPage() {
         .single()
 
       if (error) {
-        setErrorMessage(error.message)
+        setFormErrorMessage(error.message)
         setIsSaving(false)
         return
       }
@@ -1455,6 +1500,12 @@ export default function ExpensesPage() {
             </div>
 
             <form onSubmit={handleAddOrUpdate} className="space-y-4 px-4 py-4 md:px-5 md:py-5">
+              {formErrorMessage ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {formErrorMessage}
+                </div>
+              ) : null}
+
               <div>
                 <label htmlFor="expense-user-name" className="mb-1 block text-sm font-medium text-gray-700">
                   User Name

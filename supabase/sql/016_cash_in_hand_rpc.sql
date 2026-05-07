@@ -8,6 +8,7 @@ declare
   v_user_name text;
   v_approved_cash numeric;
   v_approved_expenses numeric;
+  v_pending_expenses numeric;
 begin
   select u.role, u.user_name
   into v_user_role, v_user_name
@@ -19,6 +20,7 @@ begin
     return jsonb_build_object(
       'approved_cash', 0,
       'approved_expenses', 0,
+      'pending_expenses', 0,
       'cash_in_hand', 0
     );
   end if;
@@ -37,9 +39,17 @@ begin
     e.status = 'Approved'
     and (v_user_role = 'Admin' or e.user_name = v_user_name);
 
+  select coalesce(sum(e.expense_value), 0)
+  into v_pending_expenses
+  from public.expenses e
+  where
+    e.status = 'Pending'
+    and (v_user_role = 'Admin' or e.user_name = v_user_name);
+
   return jsonb_build_object(
     'approved_cash', v_approved_cash,
     'approved_expenses', v_approved_expenses,
+    'pending_expenses', v_pending_expenses,
     'cash_in_hand', v_approved_cash - v_approved_expenses
   );
 end;
