@@ -69,6 +69,7 @@ interface ExpensesRpcResponse {
 interface CashInHandRpcResponse {
   approved_cash: number
   approved_expenses: number
+  pending_expenses: number
   cash_in_hand: number
 }
 
@@ -335,11 +336,15 @@ export default function ExpensesPage() {
     })
 
     if (error) {
-      return { cashInHand: 0, error: error.message }
+      return { cashInHand: 0, pendingExpenses: 0, error: error.message }
     }
 
     const payload = (data ?? null) as CashInHandRpcResponse | null
-    return { cashInHand: Number(payload?.cash_in_hand ?? 0), error: null as string | null }
+    return {
+      cashInHand: Number(payload?.cash_in_hand ?? 0),
+      pendingExpenses: Number(payload?.pending_expenses ?? 0),
+      error: null as string | null,
+    }
   }
 
   const loadPageData = async (silent = false) => {
@@ -564,16 +569,33 @@ export default function ExpensesPage() {
     setErrorMessage(null)
     setFormErrorMessage(null)
 
+    const editingRecordForLimit =
+      editingRecordId !== null ? records.find((record) => record.id === editingRecordId) ?? null : null
+
+    if (editingRecordId !== null && !editingRecordForLimit) {
+      setFormErrorMessage('Expense record not found.')
+      setIsSaving(false)
+      return
+    }
+
     if (currentUserRole !== 'Admin') {
-      const { cashInHand, error } = await fetchCurrentUserCashInHand()
+      const { cashInHand, pendingExpenses, error } = await fetchCurrentUserCashInHand()
       if (error) {
         setFormErrorMessage(error)
         setIsSaving(false)
         return
       }
-      if (numericExpenseValue > cashInHand) {
+
+      let availableNetCash = cashInHand - pendingExpenses
+
+      // While editing an existing pending record, add its old value back to avoid false limit block.
+      if (editingRecordForLimit?.status === 'Pending') {
+        availableNetCash += Number(editingRecordForLimit.expense_value ?? 0)
+      }
+
+      if (numericExpenseValue > availableNetCash) {
         setFormErrorMessage(
-          `Expense value cannot exceed your Cash in Hand (${formatCurrency(cashInHand)}).`
+          `Expense value cannot exceed your Net Cash in Hand (${formatCurrency(availableNetCash)}).`
         )
         setIsSaving(false)
         return
@@ -581,7 +603,7 @@ export default function ExpensesPage() {
     }
 
     if (editingRecordId !== null) {
-      const editingRecord = records.find((record) => record.id === editingRecordId)
+      const editingRecord = editingRecordForLimit
       if (!editingRecord) {
         setFormErrorMessage('Expense record not found.')
         setIsSaving(false)
