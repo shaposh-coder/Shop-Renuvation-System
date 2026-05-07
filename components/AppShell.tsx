@@ -78,11 +78,11 @@ export default function AppShell({ children }: AppShellProps) {
   }, [pathname, router])
 
   if (isAuthenticated === null) {
-    return <div className="min-h-screen bg-gray-50" />
+    return <div className="min-h-screen bg-slate-50" />
   }
 
   if (!isAuthenticated && pathname !== '/login') {
-    return <div className="min-h-screen bg-gray-50" />
+    return <div className="min-h-screen bg-slate-50" />
   }
 
   if (pathname === '/login') {
@@ -90,7 +90,7 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 md:h-screen md:flex-row">
+    <div className="flex min-h-screen flex-col bg-transparent md:h-screen md:flex-row">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
