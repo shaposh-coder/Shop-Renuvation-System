@@ -1430,9 +1430,9 @@ export default function CashRecordsPage() {
       ) : null}
 
       {isModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-xl rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex h-[min(100dvh-0.5rem,920px)] max-h-[min(100dvh-0.5rem,920px)] w-full max-w-xl min-w-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:h-auto sm:max-h-[min(92dvh,840px)] sm:rounded-xl">
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">
                 {editingRecordId !== null ? 'Edit Cash Record' : 'Add Cash Record'}
               </h2>
@@ -1446,7 +1446,11 @@ export default function CashRecordsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleAddOrUpdate} className="space-y-4 px-4 py-4 md:px-5 md:py-5">
+            <form
+              onSubmit={handleAddOrUpdate}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
               <div>
                 <label htmlFor="cash-user-name" className="mb-1 block text-sm font-medium text-gray-700">
                   User Name
@@ -1587,7 +1591,7 @@ export default function CashRecordsPage() {
                 ) : null}
               </div>
 
-              <div ref={locationDropdownRef}>
+              <div ref={locationDropdownRef} className="relative min-w-0">
                 <p className="mb-1 block text-sm font-medium text-gray-700">Location</p>
                 <button
                   type="button"
@@ -1606,7 +1610,7 @@ export default function CashRecordsPage() {
                 </button>
 
                 {isLocationDropdownOpen ? (
-                  <div className="absolute z-20 mt-1 max-h-52 w-[calc(100%-2.5rem)] overflow-y-auto rounded-md border border-gray-300 bg-white p-2 shadow-lg sm:w-[420px]">
+                  <div className="absolute left-0 right-0 z-20 mt-1 max-h-52 w-full max-w-full overflow-y-auto rounded-md border border-gray-300 bg-white p-2 shadow-lg sm:w-[420px] sm:max-w-none">
                     <input
                       type="text"
                       value={locationSearchTerm}
@@ -1649,7 +1653,9 @@ export default function CashRecordsPage() {
                 ) : null}
               </div>
 
-              <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+              </div>
+
+              <div className="flex shrink-0 flex-col-reverse gap-2 border-t bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
                 <button
                   type="button"
                   onClick={closeFormModal}

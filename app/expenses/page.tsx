@@ -69,13 +69,6 @@ interface ExpensesRpcResponse {
   records: ExpenseRecord[]
 }
 
-interface CashInHandRpcResponse {
-  approved_cash: number
-  approved_expenses: number
-  pending_expenses: number
-  cash_in_hand: number
-}
-
 const canApproveRecord = (
   status: ExpenseStatus,
   role: UserRole | null,
@@ -367,45 +360,6 @@ export default function ExpensesPage() {
     setTotalCount(typeof rpcPayload.total_count === 'number' ? rpcPayload.total_count : 0)
   }
 
-  const fetchCashInHandForEntry = async (targetUserName: string) => {
-    let targetEmail = ''
-
-    if (currentUserRole === 'Admin') {
-      const { data: targetUser, error: targetUserError } = await supabase
-        .from('users')
-        .select('user_email')
-        .eq('user_name', targetUserName)
-        .limit(1)
-        .maybeSingle<{ user_email: string }>()
-
-      if (targetUserError || !targetUser?.user_email) {
-        return { cashInHand: 0, pendingExpenses: 0, error: 'Selected user account was not found.' }
-      }
-
-      targetEmail = targetUser.user_email
-    } else {
-      targetEmail = getCurrentUserEmail()
-      if (!targetEmail) {
-        return { cashInHand: 0, pendingExpenses: 0, error: 'Unable to find current user session.' }
-      }
-    }
-
-    const { data, error } = await supabase.rpc('get_cash_in_hand_value', {
-      p_user_email: targetEmail,
-    })
-
-    if (error) {
-      return { cashInHand: 0, pendingExpenses: 0, error: error.message }
-    }
-
-    const payload = (data ?? null) as CashInHandRpcResponse | null
-    return {
-      cashInHand: Number(payload?.cash_in_hand ?? 0),
-      pendingExpenses: Number(payload?.pending_expenses ?? 0),
-      error: null as string | null,
-    }
-  }
-
   const loadPageData = async (silent = false) => {
     if (!silent) setIsLoading(true)
     setErrorMessage(null)
@@ -666,28 +620,6 @@ export default function ExpensesPage() {
 
     if (editingRecordId !== null && !editingRecordForLimit) {
       setFormErrorMessage('Expense record not found.')
-      setIsSaving(false)
-      return
-    }
-
-    const { cashInHand, pendingExpenses, error } = await fetchCashInHandForEntry(effectiveUserName)
-    if (error) {
-      setFormErrorMessage(error)
-      setIsSaving(false)
-      return
-    }
-
-    let availableNetCash = cashInHand - pendingExpenses
-
-    // While editing an existing pending record, add its old value back to avoid false limit block.
-    if (editingRecordForLimit?.status === 'Pending') {
-      availableNetCash += Number(editingRecordForLimit.expense_value ?? 0)
-    }
-
-    if (numericExpenseValue > availableNetCash) {
-      setFormErrorMessage(
-        `Expense value cannot exceed Net Cash in Hand (${formatCurrency(availableNetCash)}).`
-      )
       setIsSaving(false)
       return
     }
@@ -1656,9 +1588,9 @@ export default function ExpensesPage() {
       ) : null}
 
       {isModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-xl rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex h-[min(100dvh-0.5rem,920px)] max-h-[min(100dvh-0.5rem,920px)] w-full max-w-xl min-w-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:h-auto sm:max-h-[min(92dvh,840px)] sm:rounded-xl">
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">
                 {editingRecordId !== null ? 'Edit Expense' : 'Add Expense'}
               </h2>
@@ -1672,7 +1604,8 @@ export default function ExpensesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleAddOrUpdate} className="space-y-4 px-4 py-4 md:px-5 md:py-5">
+            <form onSubmit={handleAddOrUpdate} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
               {formErrorMessage ? (
                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {formErrorMessage}
@@ -1821,7 +1754,7 @@ export default function ExpensesPage() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <div ref={locationDropdownRef}>
+                  <div ref={locationDropdownRef} className="relative min-w-0">
                     <p className="mb-1 block text-sm font-medium text-gray-700">Location</p>
                     <button
                       type="button"
@@ -1840,7 +1773,7 @@ export default function ExpensesPage() {
                     </button>
 
                     {isLocationDropdownOpen ? (
-                      <div className="absolute z-20 mt-1 max-h-52 w-[calc(100%-2.5rem)] overflow-y-auto rounded-md border border-gray-300 bg-white p-2 shadow-lg sm:w-[230px]">
+                      <div className="absolute left-0 right-0 z-20 mt-1 max-h-52 w-full max-w-full overflow-y-auto rounded-md border border-gray-300 bg-white p-2 shadow-lg sm:w-[230px] sm:max-w-none">
                         <input
                           type="text"
                           value={locationSearchTerm}
@@ -1879,7 +1812,7 @@ export default function ExpensesPage() {
                   </div>
                 </div>
 
-                <div ref={categoryDropdownRef}>
+                <div ref={categoryDropdownRef} className="relative min-w-0">
                   <p className="mb-1 block text-sm font-medium text-gray-700">Category</p>
                   <button
                     type="button"
@@ -1895,7 +1828,7 @@ export default function ExpensesPage() {
                   </button>
 
                   {isCategoryDropdownOpen ? (
-                    <div className="absolute z-20 mt-1 max-h-52 w-[calc(100%-2.5rem)] overflow-y-auto rounded-md border border-gray-300 bg-white p-2 shadow-lg sm:w-[230px]">
+                    <div className="absolute left-0 right-0 z-20 mt-1 max-h-52 w-full max-w-full overflow-y-auto rounded-md border border-gray-300 bg-white p-2 shadow-lg sm:w-[230px] sm:max-w-none">
                       <input
                         type="text"
                         value={categorySearchTerm}
@@ -1934,7 +1867,9 @@ export default function ExpensesPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+              </div>
+
+              <div className="flex shrink-0 flex-col-reverse gap-2 border-t bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
                 <button
                   type="button"
                   onClick={closeFormModal}
