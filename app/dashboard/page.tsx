@@ -19,6 +19,13 @@ interface CashInHandRpcResponse {
   cash_in_hand: number
 }
 
+interface CashInHandUserRow {
+  user_name: string
+  cash_value: number
+  pending_expenses: number
+  net_cash_in_hand: number
+}
+
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummaryRpcResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -26,6 +33,9 @@ export default function DashboardPage() {
   const [fixedNetCashInHand, setFixedNetCashInHand] = useState(0)
   const [fixedPendingExpenses, setFixedPendingExpenses] = useState(0)
   const [isFixedNetLoading, setIsFixedNetLoading] = useState(true)
+  const [cashByUserRows, setCashByUserRows] = useState<CashInHandUserRow[]>([])
+  const [isCashByUserLoading, setIsCashByUserLoading] = useState(true)
+  const [cashByUserError, setCashByUserError] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [userOptions, setUserOptions] = useState<string[]>([])
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -189,6 +199,53 @@ export default function DashboardPage() {
     }
 
     fetchFixedNetCash()
+  }, [])
+
+  useEffect(() => {
+    const fetchCashByUser = async () => {
+      setIsCashByUserLoading(true)
+      setCashByUserError(null)
+
+      const emailCookie = document.cookie
+        .split('; ')
+        .find((entry) => entry.startsWith('rms_user_email='))
+
+      const currentEmail = emailCookie
+        ? decodeURIComponent(emailCookie.split('=')[1] ?? '')
+        : (localStorage.getItem('rms_user_email') ?? '')
+
+      if (!currentEmail) {
+        setCashByUserRows([])
+        setIsCashByUserLoading(false)
+        return
+      }
+
+      const { data, error } = await supabase.rpc('get_cash_in_hand_by_user_rows', {
+        p_viewer_email: currentEmail,
+      })
+
+      if (error) {
+        setCashByUserError(error.message)
+        setCashByUserRows([])
+        setIsCashByUserLoading(false)
+        return
+      }
+
+      const raw = (data ?? []) as unknown[]
+      const rows: CashInHandUserRow[] = raw.map((item) => {
+        const r = item as Record<string, unknown>
+        return {
+          user_name: String(r.user_name ?? ''),
+          cash_value: Number(r.cash_value ?? 0),
+          pending_expenses: Number(r.pending_expenses ?? 0),
+          net_cash_in_hand: Number(r.net_cash_in_hand ?? 0),
+        }
+      })
+      setCashByUserRows(rows)
+      setIsCashByUserLoading(false)
+    }
+
+    fetchCashByUser()
   }, [])
 
   return (
@@ -423,6 +480,80 @@ export default function DashboardPage() {
               <span className="font-bold text-gray-900">{formatCurrency(summary?.cash.total ?? 0)}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="my-8 border-t border-gray-200" role="separator" />
+
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-4 py-4 md:px-6">
+          <h2 className="text-lg font-semibold text-gray-900">Cash in hand by user</h2>
+          <p className="mt-1 text-sm text-gray-500">
+          Same figures as the Cash in Hand of All Users.
+          </p>
+        </div>
+
+        {cashByUserError ? (
+          <div className="px-4 py-3 text-sm text-red-700 md:px-6">
+            {cashByUserError}
+            <span className="mt-1 block text-xs text-gray-600">
+              If this is a new install, run the SQL migration that defines{' '}
+              <code className="rounded bg-gray-100 px-1">get_cash_in_hand_by_user_rows</code> in Supabase.
+            </span>
+          </div>
+        ) : null}
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="whitespace-nowrap px-4 py-3 font-semibold text-gray-700 md:px-6">
+                  User name
+                </th>
+                <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-semibold text-gray-700 md:px-6">
+                  Cash value
+                </th>
+                <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-semibold text-gray-700 md:px-6">
+                  Pending expenses
+                </th>
+                <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-semibold text-gray-700 md:px-6">
+                  Net cash in hand
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {isCashByUserLoading ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500 md:px-6">
+                    Loading…
+                  </td>
+                </tr>
+              ) : cashByUserRows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500 md:px-6">
+                    No users in this list.
+                  </td>
+                </tr>
+              ) : (
+                cashByUserRows.map((row) => (
+                  <tr key={row.user_name} className="hover:bg-gray-50/80">
+                    <td className="max-w-[10rem] truncate px-4 py-3 font-medium text-gray-900 md:max-w-none md:px-6">
+                      {row.user_name}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-gray-900 md:px-6">
+                      {formatCurrency(row.cash_value)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-gray-900 md:px-6">
+                      {formatCurrency(row.pending_expenses)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-gray-900 md:px-6">
+                      {formatCurrency(row.net_cash_in_hand)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
