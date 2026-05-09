@@ -485,16 +485,16 @@ export default function DashboardPage() {
 
       <div className="my-8 border-t border-gray-200" role="separator" />
 
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-4 py-4 md:px-6">
-          <h2 className="text-lg font-semibold text-gray-900">Cash in hand by user</h2>
-          <p className="mt-1 text-sm text-gray-500">
-          Same figures as the Cash in Hand of All Users.
+      <div className="min-w-0 overflow-x-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-3 py-4 sm:px-4 md:px-6">
+          <h2 className="text-base font-semibold text-gray-900 sm:text-lg">Cash in hand by user</h2>
+          <p className="mt-1 text-xs leading-relaxed text-gray-500 sm:text-sm">
+            Same figures as the Cash in Hand of All Users.
           </p>
         </div>
 
         {cashByUserError ? (
-          <div className="px-4 py-3 text-sm text-red-700 md:px-6">
+          <div className="px-3 py-3 text-sm text-red-700 sm:px-4 md:px-6">
             {cashByUserError}
             <span className="mt-1 block text-xs text-gray-600">
               If this is a new install, run the SQL migration that defines{' '}
@@ -503,7 +503,48 @@ export default function DashboardPage() {
           </div>
         ) : null}
 
-        <div className="overflow-x-auto">
+        {/* Mobile: one card per user — no horizontal table scroll */}
+        <div className="md:hidden">
+          {isCashByUserLoading ? (
+            <div className="px-3 py-10 text-center text-sm text-gray-500 sm:px-4">Loading…</div>
+          ) : cashByUserRows.length === 0 ? (
+            <div className="px-3 py-10 text-center text-sm text-gray-500 sm:px-4">No users in this list.</div>
+          ) : (
+            <ul className="space-y-3 px-3 pb-4 pt-1 sm:px-4">
+              {cashByUserRows.map((row) => (
+                <li
+                  key={row.user_name}
+                  className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm ring-1 ring-gray-100"
+                >
+                  <p className="text-sm font-semibold leading-snug text-gray-900 break-words">{row.user_name}</p>
+                  <dl className="mt-3 space-y-2.5 border-t border-gray-100 pt-3 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="shrink-0 text-gray-600">Cash value</dt>
+                      <dd className="min-w-0 text-right font-medium tabular-nums text-gray-900">
+                        {formatCurrency(row.cash_value)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="shrink-0 text-gray-600">Pending expenses</dt>
+                      <dd className="min-w-0 text-right font-medium tabular-nums text-gray-900">
+                        {formatCurrency(row.pending_expenses)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 border-t border-gray-100 pt-2.5">
+                      <dt className="shrink-0 font-medium text-gray-800">Net cash in hand</dt>
+                      <dd className="min-w-0 text-right text-base font-bold tabular-nums text-gray-900">
+                        {formatCurrency(row.net_cash_in_hand)}
+                      </dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* md+: table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -537,7 +578,7 @@ export default function DashboardPage() {
               ) : (
                 cashByUserRows.map((row) => (
                   <tr key={row.user_name} className="hover:bg-gray-50/80">
-                    <td className="max-w-[10rem] truncate px-4 py-3 font-medium text-gray-900 md:max-w-none md:px-6">
+                    <td className="max-w-[12rem] truncate px-4 py-3 font-medium text-gray-900 md:max-w-none md:px-6">
                       {row.user_name}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right text-gray-900 md:px-6">
