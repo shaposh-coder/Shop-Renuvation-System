@@ -880,6 +880,7 @@ export default function CashRecordsPage() {
       'location_id',
       'from_status',
       'to_status',
+      'source',
     ])
 
     return Object.entries(details ?? {}).filter(([key]) => !hiddenKeys.has(key))
