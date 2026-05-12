@@ -9,6 +9,7 @@ interface Location {
   id: number
   shop_name: string
   address: string
+  expense_value_total: number
 }
 
 interface LocationPageRpcResponse {
@@ -34,6 +35,7 @@ export default function SettingsLocationPage() {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null)
   const [showValidation, setShowValidation] = useState(false)
   const hasFetchedOnceRef = useRef(false)
+  const formatCurrency = (value: number) => `Rs. ${Number(value || 0).toLocaleString('en-PK')}`
 
   const fetchLocations = async () => {
     setIsLoading(true)
@@ -64,7 +66,12 @@ export default function SettingsLocationPage() {
     }
 
     const rpcPayload = (data ?? {}) as Partial<LocationPageRpcResponse>
-    setLocations(Array.isArray(rpcPayload.locations) ? rpcPayload.locations : [])
+    setLocations(
+      (Array.isArray(rpcPayload.locations) ? rpcPayload.locations : []).map((location) => ({
+        ...location,
+        expense_value_total: Number(location.expense_value_total ?? 0),
+      }))
+    )
     setIsLoading(false)
   }
 
@@ -117,7 +124,11 @@ export default function SettingsLocationPage() {
       }
 
       setLocations((prev) =>
-        prev.map((location) => (location.id === editingLocationId ? data : location))
+        prev.map((location) =>
+          location.id === editingLocationId
+            ? { ...data, expense_value_total: location.expense_value_total ?? 0 }
+            : location
+        )
       )
     } else {
       const { data, error } = await supabase
@@ -134,7 +145,7 @@ export default function SettingsLocationPage() {
         return
       }
 
-      setLocations((prev) => [data, ...prev])
+      setLocations((prev) => [{ ...data, expense_value_total: 0 }, ...prev])
     }
 
     setShopName('')
@@ -273,19 +284,20 @@ export default function SettingsLocationPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Shop Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Address</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Value</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Action</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">
                     Loading locations...
                   </td>
                 </tr>
               ) : filteredLocations.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">
                     No locations found.
                   </td>
                 </tr>
@@ -294,6 +306,9 @@ export default function SettingsLocationPage() {
                   <tr key={location.id} className="border-t">
                     <td className="px-4 py-3 text-sm text-gray-700">{location.shop_name}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{location.address}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-800">
+                      {formatCurrency(location.expense_value_total)}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -348,8 +363,13 @@ export default function SettingsLocationPage() {
               }}
               className="relative min-h-[64px] rounded-xl bg-white px-4 py-3 shadow"
             >
-              <div className="flex min-h-[40px] items-center justify-between gap-3">
-                <h3 className="text-base font-semibold text-gray-800">{location.shop_name}</h3>
+              <div className="flex min-h-[40px] items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-gray-800">{location.shop_name}</h3>
+                  <p className="mt-1 text-xs font-semibold text-gray-700">
+                    Value: {formatCurrency(location.expense_value_total)}
+                  </p>
+                </div>
                 <div className="relative">
                   <button
                     type="button"
@@ -561,6 +581,12 @@ export default function SettingsLocationPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Address</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-800">
                   {selectedLocation.address}
+                </p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Value</p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {formatCurrency(selectedLocation.expense_value_total)}
                 </p>
               </div>
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">

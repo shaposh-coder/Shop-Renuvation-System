@@ -9,10 +9,18 @@ interface Category {
   id: number
   name: string
   description: string | null
+  expense_value_total: number
 }
 
 interface CategoriesPageRpcResponse {
   categories: Category[]
+}
+
+interface CategoryExpenseShopRow {
+  location_id: number | null
+  shop_name: string
+  expense_value_total: number
+  expense_count: number
 }
 
 export default function SettingsCategoriesPage() {
@@ -32,8 +40,13 @@ export default function SettingsCategoriesPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
+  const [expenseDetailsCategory, setExpenseDetailsCategory] = useState<Category | null>(null)
+  const [expenseShopRows, setExpenseShopRows] = useState<CategoryExpenseShopRow[]>([])
+  const [isExpenseDetailsLoading, setIsExpenseDetailsLoading] = useState(false)
+  const [expenseDetailsError, setExpenseDetailsError] = useState<string | null>(null)
   const [showValidation, setShowValidation] = useState(false)
   const hasFetchedOnceRef = useRef(false)
+  const formatCurrency = (value: number) => `Rs. ${Number(value || 0).toLocaleString('en-PK')}`
 
   const fetchCategories = async () => {
     setIsLoading(true)
@@ -48,7 +61,12 @@ export default function SettingsCategoriesPage() {
     }
 
     const rpcPayload = (data ?? {}) as Partial<CategoriesPageRpcResponse>
-    setCategories(Array.isArray(rpcPayload.categories) ? rpcPayload.categories : [])
+    setCategories(
+      (Array.isArray(rpcPayload.categories) ? rpcPayload.categories : []).map((category) => ({
+        ...category,
+        expense_value_total: Number(category.expense_value_total ?? 0),
+      }))
+    )
     setIsLoading(false)
   }
 
@@ -101,7 +119,11 @@ export default function SettingsCategoriesPage() {
       }
 
       setCategories((prev) =>
-        prev.map((category) => (category.id === editingCategoryId ? data : category))
+        prev.map((category) =>
+          category.id === editingCategoryId
+            ? { ...data, expense_value_total: category.expense_value_total ?? 0 }
+            : category
+        )
       )
     } else {
       const { data, error } = await supabase
@@ -118,7 +140,7 @@ export default function SettingsCategoriesPage() {
         return
       }
 
-      setCategories((prev) => [data, ...prev])
+      setCategories((prev) => [{ ...data, expense_value_total: 0 }, ...prev])
     }
 
     setName('')
@@ -157,6 +179,45 @@ export default function SettingsCategoriesPage() {
     if (!selectedCategory) return
     setDeleteCategoryId(selectedCategory.id)
     setSelectedCategory(null)
+  }
+
+  const openExpenseDetailsModal = async (category: Category) => {
+    setOpenActionMenuId(null)
+    setExpenseDetailsCategory(category)
+    setExpenseShopRows([])
+    setExpenseDetailsError(null)
+    setIsExpenseDetailsLoading(true)
+
+    const { data, error } = await supabase.rpc('get_category_expense_shop_details', {
+      p_category_id: category.id,
+    })
+
+    if (error) {
+      setExpenseDetailsError(error.message)
+      setIsExpenseDetailsLoading(false)
+      return
+    }
+
+    const rawRows = (data ?? []) as unknown[]
+    setExpenseShopRows(
+      rawRows.map((row) => {
+        const item = row as Record<string, unknown>
+        return {
+          location_id: item.location_id === null || item.location_id === undefined ? null : Number(item.location_id),
+          shop_name: String(item.shop_name ?? 'Unknown shop'),
+          expense_value_total: Number(item.expense_value_total ?? 0),
+          expense_count: Number(item.expense_count ?? 0),
+        }
+      })
+    )
+    setIsExpenseDetailsLoading(false)
+  }
+
+  const closeExpenseDetailsModal = () => {
+    setExpenseDetailsCategory(null)
+    setExpenseShopRows([])
+    setExpenseDetailsError(null)
+    setIsExpenseDetailsLoading(false)
   }
 
   const closeFormModal = () => {
@@ -256,19 +317,20 @@ export default function SettingsCategoriesPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Description</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-white">Value</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-white">Action</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">
                     Loading categories...
                   </td>
                 </tr>
               ) : filteredCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">
                     No categories found.
                   </td>
                 </tr>
@@ -277,22 +339,48 @@ export default function SettingsCategoriesPage() {
                   <tr key={category.id} className="border-t">
                     <td className="px-4 py-3 text-sm text-gray-700">{category.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{category.description || '-'}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-800">
+                      {formatCurrency(category.expense_value_total)}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="relative inline-block">
                         <button
                           type="button"
-                          onClick={() => openEditModal(category)}
-                          className="rounded-md border border-blue-600 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                          onClick={() => setOpenActionMenuId((prev) => (prev === category.id ? null : category.id))}
+                          className="rounded-md p-2 text-gray-600 hover:bg-gray-100"
+                          aria-label="Open category actions"
                         >
-                          Edit
+                          <MoreVertical className="h-5 w-5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteCategoryId(category.id)}
-                          className="rounded-md border border-red-600 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
+
+                        {openActionMenuId === category.id ? (
+                          <div className="absolute right-0 top-10 z-20 min-w-[150px] rounded-md border bg-white py-1 shadow-lg">
+                            <button
+                              type="button"
+                              onClick={() => openExpenseDetailsModal(category)}
+                              className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              Expenses
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(category)}
+                              className="block w-full px-3 py-2 text-left text-sm text-blue-600 hover:bg-blue-50"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteCategoryId(category.id)
+                                setOpenActionMenuId(null)
+                              }}
+                              className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -331,8 +419,13 @@ export default function SettingsCategoriesPage() {
               }}
               className="relative min-h-[64px] rounded-xl bg-white px-4 py-3 shadow"
             >
-              <div className="flex min-h-[40px] items-center justify-between gap-3">
-                <h3 className="text-base font-semibold text-gray-800">{category.name}</h3>
+              <div className="flex min-h-[40px] items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-gray-800">{category.name}</h3>
+                  <p className="mt-1 text-xs font-semibold text-gray-700">
+                    Value: {formatCurrency(category.expense_value_total)}
+                  </p>
+                </div>
                 <div className="relative">
                   <button
                     type="button"
@@ -347,7 +440,17 @@ export default function SettingsCategoriesPage() {
                   </button>
 
                   {openActionMenuId === category.id ? (
-                    <div className="absolute right-0 top-10 z-20 min-w-[130px] rounded-md border bg-white py-1 shadow-lg">
+                    <div className="absolute right-0 top-10 z-20 min-w-[150px] rounded-md border bg-white py-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openExpenseDetailsModal(category)
+                        }}
+                        className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Expenses
+                      </button>
                       <button
                         type="button"
                         onClick={(event) => {
@@ -518,6 +621,92 @@ export default function SettingsCategoriesPage() {
         </div>
       ) : null}
 
+      {expenseDetailsCategory ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex max-h-[min(100dvh-0.5rem,720px)] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[min(92dvh,720px)] sm:rounded-xl">
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:px-5">
+              <div className="min-w-0">
+                <h2 className="truncate text-lg font-semibold text-gray-800">Expenses</h2>
+                <p className="truncate text-sm text-gray-500">{expenseDetailsCategory.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeExpenseDetailsModal}
+                className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Close expenses details modal"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
+              <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Total Category Value</p>
+                <p className="mt-1 text-xl font-bold text-blue-950">
+                  {formatCurrency(expenseDetailsCategory.expense_value_total)}
+                </p>
+              </div>
+
+              {expenseDetailsError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {expenseDetailsError}
+                </div>
+              ) : null}
+
+              {isExpenseDetailsLoading ? (
+                <div className="rounded-lg border border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+                  Loading expenses...
+                </div>
+              ) : expenseDetailsError ? null : expenseShopRows.length === 0 ? (
+                <div className="rounded-lg border border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+                  No expenses found for this category.
+                </div>
+              ) : (
+                <>
+                  <div className="hidden overflow-hidden rounded-lg border border-gray-200 md:block">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Shop</th>
+                          <th className="px-4 py-3 text-right font-semibold text-gray-700">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {expenseShopRows.map((row) => (
+                          <tr key={`${row.location_id ?? 'unknown'}-${row.shop_name}`}>
+                            <td className="px-4 py-3 text-gray-700">{row.shop_name}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                              {formatCurrency(row.expense_value_total)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="space-y-3 md:hidden">
+                    {expenseShopRows.map((row) => (
+                      <div
+                        key={`${row.location_id ?? 'unknown'}-${row.shop_name}`}
+                        className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                      >
+                        <p className="break-words text-sm font-semibold text-gray-900">{row.shop_name}</p>
+                        <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                          <span className="text-sm text-gray-600">Value</span>
+                          <span className="text-right text-sm font-bold text-gray-900">
+                            {formatCurrency(row.expense_value_total)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {selectedCategory ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
@@ -543,6 +732,12 @@ export default function SettingsCategoriesPage() {
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-800">
                   {selectedCategory.description || 'No description provided.'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Value</p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {formatCurrency(selectedCategory.expense_value_total)}
                 </p>
               </div>
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">

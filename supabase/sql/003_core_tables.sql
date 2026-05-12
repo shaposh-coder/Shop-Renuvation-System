@@ -242,11 +242,17 @@ begin
             jsonb_build_object(
               'id', l.id,
               'shop_name', l.shop_name,
-              'address', l.address
+              'address', l.address,
+              'expense_value_total', coalesce(location_totals.total_value, 0)
             )
             order by l.id desc
           )
           from public.locations l
+          left join (
+            select e.location_id, coalesce(sum(e.expense_value), 0) as total_value
+            from public.expenses e
+            group by e.location_id
+          ) location_totals on location_totals.location_id = l.id
         ),
         '[]'::jsonb
       )
@@ -261,11 +267,17 @@ begin
           jsonb_build_object(
             'id', l.id,
             'shop_name', l.shop_name,
-            'address', l.address
+            'address', l.address,
+            'expense_value_total', coalesce(location_totals.total_value, 0)
           )
           order by l.id desc
         )
         from public.locations l
+        left join (
+          select e.location_id, coalesce(sum(e.expense_value), 0) as total_value
+          from public.expenses e
+          group by e.location_id
+        ) location_totals on location_totals.location_id = l.id
         where l.id in (
           select ul.location_id
           from public.user_locations ul
