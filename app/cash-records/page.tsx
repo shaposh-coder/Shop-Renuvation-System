@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
+import { CheckCircle, ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
 type CashRecordStatus = 'Pending' | 'Approved'
 type UserRole = 'Admin' | 'Managment' | 'Viewer'
@@ -166,11 +166,13 @@ export default function CashRecordsPage() {
   const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([])
   const [isTimelineLoading, setIsTimelineLoading] = useState(false)
   const [timelineError, setTimelineError] = useState<string | null>(null)
+  const [isApproveAllConfirmOpen, setIsApproveAllConfirmOpen] = useState(false)
   const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null)
   const [mobileActionMenuId, setMobileActionMenuId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRecordsLoading, setIsRecordsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isApprovingAll, setIsApprovingAll] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showValidation, setShowValidation] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -843,6 +845,33 @@ export default function CashRecordsPage() {
     setIsSaving(false)
   }
 
+  const handleApproveAllVisible = async () => {
+    const pendingRecords = records.filter((record) =>
+      canApproveRecord(record.status, currentUserRole, currentUserAdminAccess)
+    )
+
+    if (pendingRecords.length === 0) return
+
+    setIsApprovingAll(true)
+    setErrorMessage(null)
+
+    const recordIds = pendingRecords.map((record) => record.id)
+    const { error } = await supabase.from('cash_records').update({ status: 'Approved' }).in('id', recordIds)
+
+    if (error) {
+      setErrorMessage(error.message)
+      setIsApprovingAll(false)
+      return
+    }
+
+    await Promise.all(pendingRecords.map((record) => recordTimeline(record.id, 'Approved').catch(() => undefined)))
+    await refreshCurrentPage()
+    setActionMenu(null)
+    setMobileActionMenuId(null)
+    setIsApproveAllConfirmOpen(false)
+    setIsApprovingAll(false)
+  }
+
   const getLocationName = (record: CashRecord) => {
     const locationRecord = Array.isArray(record.locations) ? record.locations[0] : record.locations
     return locationRecord?.shop_name ?? '-'
@@ -928,6 +957,9 @@ export default function CashRecordsPage() {
   const showUserColumn = currentUserRole === 'Admin'
   const canApprove = (status: CashRecordStatus) =>
     canApproveRecord(status, currentUserRole, currentUserAdminAccess)
+  const visiblePendingApprovalCount = records.filter((record) =>
+    canApproveRecord(record.status, currentUserRole, currentUserAdminAccess)
+  ).length
 
   return (
     <div className="p-4 md:p-8">
@@ -953,6 +985,17 @@ export default function CashRecordsPage() {
           >
             <SlidersHorizontal className="h-4 w-4" />
             <span>Filter</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsApproveAllConfirmOpen(true)}
+            disabled={visiblePendingApprovalCount === 0 || isApprovingAll || isRecordsLoading}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-500"
+            title="Approve all visible pending cash records"
+          >
+            <CheckCircle className="h-4 w-4" />
+            <span>{isApprovingAll ? 'Approving...' : 'Approve All'}</span>
           </button>
 
           <div className="relative w-full sm:w-64">
@@ -1271,7 +1314,7 @@ export default function CashRecordsPage() {
                           onClick={(event) => {
                             event.stopPropagation()
                             const buttonRect = event.currentTarget.getBoundingClientRect()
-                            const estimatedMenuHeight = currentUserRole === 'Admin' ? 132 : 92
+                            const estimatedMenuHeight = currentUserRole === 'Admin' ? 180 : 144
                             const spaceBelow = window.innerHeight - buttonRect.bottom
                             const shouldOpenUp = spaceBelow < estimatedMenuHeight && buttonRect.top > estimatedMenuHeight
 
@@ -1940,6 +1983,42 @@ export default function CashRecordsPage() {
                   className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                 >
                   {isSaving ? 'Approving...' : 'Approve'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isApproveAllConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+            <div className="border-b px-4 py-3 md:px-5">
+              <h2 className="text-lg font-semibold text-gray-800">Approve All Cash Records</h2>
+            </div>
+            <div className="px-4 py-4 md:px-5 md:py-5">
+              <p className="text-sm text-gray-700">
+                Are you sure you want to approve all visible pending cash records?
+              </p>
+              <p className="mt-2 text-sm font-semibold text-emerald-700">
+                {visiblePendingApprovalCount} pending record(s) will be approved.
+              </p>
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsApproveAllConfirmOpen(false)}
+                  disabled={isApprovingAll}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApproveAllVisible}
+                  disabled={isApprovingAll}
+                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isApprovingAll ? 'Approving...' : 'Approve All'}
                 </button>
               </div>
             </div>
