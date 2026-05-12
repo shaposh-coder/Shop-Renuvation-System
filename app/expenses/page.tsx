@@ -70,6 +70,15 @@ interface ExpensesRpcResponse {
   records: ExpenseRecord[]
 }
 
+interface TimelineEntry {
+  id: number
+  action: string
+  actor_name: string | null
+  actor_email: string | null
+  details: Record<string, unknown> | null
+  created_at: string
+}
+
 const canApproveRecord = (
   status: ExpenseStatus,
   role: UserRole | null,
@@ -171,6 +180,10 @@ export default function ExpensesPage() {
   const [deleteRecordId, setDeleteRecordId] = useState<number | null>(null)
   const [approveRecordId, setApproveRecordId] = useState<number | null>(null)
   const [viewRecordId, setViewRecordId] = useState<number | null>(null)
+  const [timelineRecordId, setTimelineRecordId] = useState<number | null>(null)
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([])
+  const [isTimelineLoading, setIsTimelineLoading] = useState(false)
+  const [timelineError, setTimelineError] = useState<string | null>(null)
   const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null)
   const [mobileActionMenuId, setMobileActionMenuId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -578,6 +591,54 @@ export default function ExpensesPage() {
     setIsModalOpen(true)
   }
 
+  const recordTimeline = async (
+    recordId: number,
+    action: string,
+    details: Record<string, unknown> = {}
+  ) => {
+    const actorName = currentUserName.trim() || localStorage.getItem('rms_user_name') || 'Unknown user'
+    const actorEmail = currentUserEmail || getCurrentUserEmail()
+
+    await supabase.from('entry_timeline').insert({
+      entry_type: 'expense',
+      entry_id: recordId,
+      action,
+      actor_name: actorName,
+      actor_email: actorEmail || null,
+      details,
+    })
+  }
+
+  const openTimelineModal = async (record: ExpenseRecord) => {
+    setTimelineRecordId(record.id)
+    setTimelineEntries([])
+    setTimelineError(null)
+    setIsTimelineLoading(true)
+    setActionMenu(null)
+    setMobileActionMenuId(null)
+
+    const { data, error } = await supabase.rpc('get_entry_timeline', {
+      p_entry_type: 'expense',
+      p_entry_id: record.id,
+    })
+
+    if (error) {
+      setTimelineError(error.message)
+      setIsTimelineLoading(false)
+      return
+    }
+
+    setTimelineEntries((Array.isArray(data) ? data : []) as TimelineEntry[])
+    setIsTimelineLoading(false)
+  }
+
+  const closeTimelineModal = () => {
+    setTimelineRecordId(null)
+    setTimelineEntries([])
+    setTimelineError(null)
+    setIsTimelineLoading(false)
+  }
+
   const handleAddOrUpdate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const trimmedUserName = userName.trim()
@@ -716,6 +777,8 @@ export default function ExpensesPage() {
         setIsSaving(false)
         return
       }
+
+      await recordTimeline(editingRecordId, 'Updated').catch(() => undefined)
     } else {
       const { data, error } = await supabase
         .from('expenses')
@@ -762,6 +825,8 @@ export default function ExpensesPage() {
         return
       }
 
+      await recordTimeline((data as ExpenseRecord).id, 'Added').catch(() => undefined)
+
       if (currentPage !== 1) {
         setCurrentPage(1)
       } else {
@@ -794,7 +859,8 @@ export default function ExpensesPage() {
       return
     }
 
-    const { error } = await supabase.from('expenses').delete().eq('id', deleteRecordId)
+    const deletedRecordId = deleteRecordId
+    const { error } = await supabase.from('expenses').delete().eq('id', deletedRecordId)
 
     if (error) {
       setErrorMessage(error.message)
@@ -802,6 +868,7 @@ export default function ExpensesPage() {
       return
     }
 
+    await recordTimeline(deletedRecordId, 'Deleted').catch(() => undefined)
     await refreshCurrentPage()
     setDeleteRecordId(null)
     setActionMenu(null)
@@ -835,6 +902,7 @@ export default function ExpensesPage() {
       return
     }
 
+    await recordTimeline(approveRecordId, 'Approved').catch(() => undefined)
     setRecords((prev) => prev.map((record) => (record.id === approveRecordId ? (data as ExpenseRecord) : record)))
     setApproveRecordId(null)
     setActionMenu(null)
@@ -864,6 +932,29 @@ export default function ExpensesPage() {
       month: 'short',
       year: 'numeric',
     })
+  const formatDateTime = (value: string) =>
+    new Date(value).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).replace(/\b(am|pm)\b/i, (match) => match.toUpperCase())
+  const getTimelineDetailEntries = (details: Record<string, unknown> | null) => {
+    const hiddenKeys = new Set([
+      'value',
+      'status',
+      'user_name',
+      'entry_date',
+      'category_id',
+      'location_id',
+      'from_status',
+      'to_status',
+    ])
+
+    return Object.entries(details ?? {}).filter(([key]) => !hiddenKeys.has(key))
+  }
 
   const isUserNameInvalid = showValidation && userName.trim().length === 0
   const isEntryDateInvalid = showValidation && entryDate.trim().length === 0
@@ -1472,6 +1563,13 @@ export default function ExpensesPage() {
                         >
                           View
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => openTimelineModal(record)}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Timeline
+                        </button>
                         {canRecordEdit ? (
                           <button
                             type="button"
@@ -1584,6 +1682,16 @@ export default function ExpensesPage() {
             >
               View
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!selectedActionRecord) return
+                openTimelineModal(selectedActionRecord)
+              }}
+              className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Timeline
+            </button>
             {!isEditDeleteBlockedForCurrentUser ? (
               <button
                 type="button"
@@ -1611,6 +1719,74 @@ export default function ExpensesPage() {
             ) : null}
           </div>
         </>
+      ) : null}
+
+      {timelineRecordId !== null ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex max-h-[min(100dvh-0.5rem,760px)] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[min(92dvh,760px)] sm:rounded-xl">
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:px-5">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">Timeline</h2>
+                <p className="text-sm text-gray-500">Expense #{timelineRecordId}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeTimelineModal}
+                className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Close timeline modal"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
+              {timelineError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {timelineError}
+                </div>
+              ) : null}
+
+              {isTimelineLoading ? (
+                <div className="rounded-lg border border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+                  Loading timeline...
+                </div>
+              ) : timelineError ? null : timelineEntries.length === 0 ? (
+                <div className="rounded-lg border border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+                  No timeline found for this record.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {timelineEntries.map((entry) => (
+                    <div key={entry.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{entry.action}</p>
+                          <p className="text-xs text-gray-500">
+                            User:{' '}
+                            <span className="font-bold text-blue-700">
+                              {entry.actor_name || entry.actor_email || 'Unknown user'}
+                            </span>
+                          </p>
+                        </div>
+                        <p className="text-xs font-medium text-gray-500">{formatDateTime(entry.created_at)}</p>
+                      </div>
+                      {getTimelineDetailEntries(entry.details).length > 0 ? (
+                        <div className="mt-3 grid gap-2 border-t border-gray-100 pt-3 text-xs text-gray-600 sm:grid-cols-2">
+                          {getTimelineDetailEntries(entry.details).map(([key, value]) => (
+                            <div key={key} className="flex justify-between gap-3 rounded-md bg-gray-50 px-2 py-1">
+                              <span className="font-medium capitalize">{key.replace(/_/g, ' ')}</span>
+                              <span className="text-right text-gray-800">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {isModalOpen ? (
