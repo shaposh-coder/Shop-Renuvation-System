@@ -362,6 +362,7 @@ declare
   v_offset integer;
   v_page_size integer;
   v_total_count bigint;
+  v_total_value numeric;
   v_records jsonb;
 begin
   select u.role, u.user_name
@@ -371,7 +372,7 @@ begin
   limit 1;
 
   if v_user_role is null then
-    return jsonb_build_object('total_count', 0, 'records', '[]'::jsonb);
+    return jsonb_build_object('total_count', 0, 'total_value', 0, 'records', '[]'::jsonb);
   end if;
 
   v_page_size := greatest(1, least(coalesce(p_page_size, 25), 200));
@@ -409,7 +410,9 @@ begin
         or cr.status ilike '%' || trim(p_search) || '%'
       )
   )
-  select count(*) into v_total_count from filtered;
+  select count(*), coalesce(sum(cash_value), 0)
+  into v_total_count, v_total_value
+  from filtered;
 
   with filtered as (
     select
@@ -473,7 +476,7 @@ begin
   into v_records
   from filtered f;
 
-  return jsonb_build_object('total_count', v_total_count, 'records', v_records);
+  return jsonb_build_object('total_count', v_total_count, 'total_value', v_total_value, 'records', v_records);
 end;
 $$;
 
@@ -502,6 +505,7 @@ declare
   v_offset integer;
   v_page_size integer;
   v_total_count bigint;
+  v_total_value numeric;
   v_records jsonb;
 begin
   select u.role, u.user_name
@@ -511,7 +515,7 @@ begin
   limit 1;
 
   if v_user_role is null then
-    return jsonb_build_object('total_count', 0, 'records', '[]'::jsonb);
+    return jsonb_build_object('total_count', 0, 'total_value', 0, 'records', '[]'::jsonb);
   end if;
 
   v_page_size := greatest(1, least(coalesce(p_page_size, 25), 200));
@@ -554,7 +558,9 @@ begin
         or e.status ilike '%' || trim(p_search) || '%'
       )
   )
-  select count(*) into v_total_count from filtered;
+  select count(*), coalesce(sum(expense_value), 0)
+  into v_total_count, v_total_value
+  from filtered;
 
   with filtered as (
     select
@@ -626,7 +632,7 @@ begin
   into v_records
   from filtered f;
 
-  return jsonb_build_object('total_count', v_total_count, 'records', v_records);
+  return jsonb_build_object('total_count', v_total_count, 'total_value', v_total_value, 'records', v_records);
 end;
 $$;
 

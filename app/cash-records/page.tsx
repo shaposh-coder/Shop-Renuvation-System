@@ -54,6 +54,7 @@ interface ActionMenuState {
 
 interface CashRecordsRpcResponse {
   total_count: number
+  total_value: number
   records: CashRecord[]
 }
 
@@ -93,6 +94,7 @@ let cashRecordsPageCache: {
   locations: LocationOption[]
   records: CashRecord[]
   totalCount: number
+  tableValueTotal: number
   currentPage: number
   currentUserContext: CurrentUserContext | null
   currentUserEmail: string
@@ -106,6 +108,7 @@ let cashRecordsPageCache: {
   locations: [],
   records: [],
   totalCount: 0,
+  tableValueTotal: 0,
   currentPage: 1,
   currentUserContext: null,
   currentUserEmail: '',
@@ -143,6 +146,7 @@ export default function CashRecordsPage() {
   const [currentUserAdminAccess, setCurrentUserAdminAccess] = useState<AdminAccess | null>(null)
   const [userOptions, setUserOptions] = useState<string[]>([])
   const [records, setRecords] = useState<CashRecord[]>([])
+  const [tableValueTotal, setTableValueTotal] = useState(0)
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null)
@@ -295,6 +299,7 @@ export default function CashRecordsPage() {
     if (!currentUserEmail) {
       setRecords([])
       setTotalCount(0)
+      setTableValueTotal(0)
       return
     }
 
@@ -314,17 +319,24 @@ export default function CashRecordsPage() {
       setErrorMessage(error.message)
       setRecords([])
       setTotalCount(0)
+      setTableValueTotal(0)
       return
     }
 
     const rpcPayload = (data ?? {}) as Partial<CashRecordsRpcResponse>
+    const nextRecords = (Array.isArray(rpcPayload.records) ? rpcPayload.records : []).map((record) => ({
+      ...record,
+      attachment_urls: Array.isArray(record.attachment_urls) ? record.attachment_urls : [],
+    }))
     setRecords(
-      (Array.isArray(rpcPayload.records) ? rpcPayload.records : []).map((record) => ({
-        ...record,
-        attachment_urls: Array.isArray(record.attachment_urls) ? record.attachment_urls : [],
-      }))
+      nextRecords
     )
     setTotalCount(typeof rpcPayload.total_count === 'number' ? rpcPayload.total_count : 0)
+    setTableValueTotal(
+      typeof rpcPayload.total_value === 'number'
+        ? rpcPayload.total_value
+        : nextRecords.reduce((total, record) => total + Number(record.cash_value || 0), 0)
+    )
   }
 
   const loadPageData = async (silent = false) => {
@@ -347,6 +359,7 @@ export default function CashRecordsPage() {
       setLocations(cashRecordsPageCache.locations)
       setRecords(cashRecordsPageCache.records)
       setTotalCount(cashRecordsPageCache.totalCount)
+      setTableValueTotal(cashRecordsPageCache.tableValueTotal)
       setCurrentPage(cashRecordsPageCache.currentPage)
       setCurrentUserContext(cashRecordsPageCache.currentUserContext)
       setCurrentUserEmail(cashRecordsPageCache.currentUserEmail)
@@ -369,6 +382,7 @@ export default function CashRecordsPage() {
       locations,
       records,
       totalCount,
+      tableValueTotal,
       currentPage,
       currentUserContext,
       currentUserEmail,
@@ -382,6 +396,7 @@ export default function CashRecordsPage() {
     locations,
     records,
     totalCount,
+    tableValueTotal,
     currentPage,
     currentUserContext,
     currentUserEmail,
@@ -1081,6 +1096,17 @@ export default function CashRecordsPage() {
               </div>
             </div>
           ) : null}
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Table Value Total</p>
+          </div>
+          <p className="text-xl font-bold text-blue-950">
+            {showRecordsLoading ? 'Loading...' : formatCurrency(tableValueTotal)}
+          </p>
         </div>
       </div>
 

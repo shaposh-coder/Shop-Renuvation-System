@@ -66,6 +66,7 @@ interface ActionMenuState {
 
 interface ExpensesRpcResponse {
   total_count: number
+  total_value: number
   records: ExpenseRecord[]
 }
 
@@ -105,6 +106,7 @@ let expensesPageCache: {
   categories: CategoryOption[]
   records: ExpenseRecord[]
   totalCount: number
+  tableValueTotal: number
   currentPage: number
   currentUserContext: CurrentUserContext | null
   currentUserEmail: string
@@ -118,6 +120,7 @@ let expensesPageCache: {
   categories: [],
   records: [],
   totalCount: 0,
+  tableValueTotal: 0,
   currentPage: 1,
   currentUserContext: null,
   currentUserEmail: '',
@@ -160,6 +163,7 @@ export default function ExpensesPage() {
   const [currentUserAdminAccess, setCurrentUserAdminAccess] = useState<AdminAccess | null>(null)
   const [userOptions, setUserOptions] = useState<string[]>([])
   const [records, setRecords] = useState<ExpenseRecord[]>([])
+  const [tableValueTotal, setTableValueTotal] = useState(0)
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [categories, setCategories] = useState<CategoryOption[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -327,6 +331,7 @@ export default function ExpensesPage() {
     if (!currentUserEmail) {
       setRecords([])
       setTotalCount(0)
+      setTableValueTotal(0)
       return
     }
 
@@ -347,17 +352,24 @@ export default function ExpensesPage() {
       setErrorMessage(error.message)
       setRecords([])
       setTotalCount(0)
+      setTableValueTotal(0)
       return
     }
 
     const rpcPayload = (data ?? {}) as Partial<ExpensesRpcResponse>
+    const nextRecords = (Array.isArray(rpcPayload.records) ? rpcPayload.records : []).map((record) => ({
+      ...record,
+      attachment_urls: Array.isArray(record.attachment_urls) ? record.attachment_urls : [],
+    }))
     setRecords(
-      (Array.isArray(rpcPayload.records) ? rpcPayload.records : []).map((record) => ({
-        ...record,
-        attachment_urls: Array.isArray(record.attachment_urls) ? record.attachment_urls : [],
-      }))
+      nextRecords
     )
     setTotalCount(typeof rpcPayload.total_count === 'number' ? rpcPayload.total_count : 0)
+    setTableValueTotal(
+      typeof rpcPayload.total_value === 'number'
+        ? rpcPayload.total_value
+        : nextRecords.reduce((total, record) => total + Number(record.expense_value || 0), 0)
+    )
   }
 
   const loadPageData = async (silent = false) => {
@@ -381,6 +393,7 @@ export default function ExpensesPage() {
       setCategories(expensesPageCache.categories)
       setRecords(expensesPageCache.records)
       setTotalCount(expensesPageCache.totalCount)
+      setTableValueTotal(expensesPageCache.tableValueTotal)
       setCurrentPage(expensesPageCache.currentPage)
       setCurrentUserContext(expensesPageCache.currentUserContext)
       setCurrentUserEmail(expensesPageCache.currentUserEmail)
@@ -403,6 +416,7 @@ export default function ExpensesPage() {
       categories,
       records,
       totalCount,
+      tableValueTotal,
       currentPage,
       currentUserContext,
       currentUserEmail,
@@ -416,6 +430,7 @@ export default function ExpensesPage() {
     categories,
     records,
     totalCount,
+    tableValueTotal,
     currentPage,
     currentUserContext,
     currentUserEmail,
@@ -1238,6 +1253,17 @@ export default function ExpensesPage() {
               </div>
             </div>
           ) : null}
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Table Value Total</p>
+          </div>
+          <p className="text-xl font-bold text-blue-950">
+            {showRecordsLoading ? 'Loading...' : formatCurrency(tableValueTotal)}
+          </p>
         </div>
       </div>
 
