@@ -2,6 +2,11 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import {
+  HEAD_OFFICE_SHOP_NAME,
+  isFixedLocation,
+  isHeadOfficeName,
+} from '@/lib/locations'
 import { MoreVertical } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -10,6 +15,7 @@ interface Location {
   shop_name: string
   address: string
   expense_value_total: number
+  is_fixed?: boolean
 }
 
 interface LocationPageRpcResponse {
@@ -104,13 +110,23 @@ export default function SettingsLocationPage() {
       return
     }
 
+    if (editingLocationId === null && isHeadOfficeName(trimmedShopName)) {
+      setErrorMessage(`"${HEAD_OFFICE_SHOP_NAME}" is a fixed system location and cannot be added manually.`)
+      return
+    }
+
     setIsSaving(true)
     setErrorMessage(null)
 
     if (editingLocationId !== null) {
+      const existingLocation = locations.find((location) => location.id === editingLocationId)
+      const updatePayload = isFixedLocation(existingLocation ?? { shop_name: trimmedShopName })
+        ? { address: trimmedAddress }
+        : { shop_name: trimmedShopName, address: trimmedAddress }
+
       const { data, error } = await supabase
         .from('locations')
-        .update({ shop_name: trimmedShopName, address: trimmedAddress })
+        .update(updatePayload)
         .eq('id', editingLocationId)
         .select('id, shop_name, address')
         .single()
@@ -197,6 +213,13 @@ export default function SettingsLocationPage() {
   const handleDeleteConfirm = async () => {
     if (deleteLocationId === null) return
 
+    const locationToDelete = locations.find((location) => location.id === deleteLocationId)
+    if (locationToDelete && isFixedLocation(locationToDelete)) {
+      setErrorMessage(`"${HEAD_OFFICE_SHOP_NAME}" is a fixed location and cannot be deleted.`)
+      setDeleteLocationId(null)
+      return
+    }
+
     setIsDeleting(true)
     setErrorMessage(null)
 
@@ -217,6 +240,9 @@ export default function SettingsLocationPage() {
   const normalizedSearch = searchTerm.trim().toLowerCase()
   const isShopNameInvalid = showValidation && shopName.trim().length === 0
   const isAddressInvalid = showValidation && address.trim().length === 0
+  const editingLocation =
+    editingLocationId !== null ? locations.find((location) => location.id === editingLocationId) ?? null : null
+  const isEditingFixedLocation = editingLocation ? isFixedLocation(editingLocation) : false
   const filteredLocations =
     normalizedSearch.length === 0
       ? locations
@@ -224,8 +250,14 @@ export default function SettingsLocationPage() {
           const searchableValue = `${location.shop_name} ${location.address}`.toLowerCase()
           return searchableValue.includes(normalizedSearch)
         })
-  const totalPages = Math.max(1, Math.ceil(filteredLocations.length / ITEMS_PER_PAGE))
-  const paginatedLocations = filteredLocations.slice(
+  const sortedFilteredLocations = [...filteredLocations].sort((a, b) => {
+    if (isFixedLocation(a) !== isFixedLocation(b)) {
+      return isFixedLocation(a) ? -1 : 1
+    }
+    return a.shop_name.localeCompare(b.shop_name)
+  })
+  const totalPages = Math.max(1, Math.ceil(sortedFilteredLocations.length / ITEMS_PER_PAGE))
+  const paginatedLocations = sortedFilteredLocations.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   )
@@ -295,7 +327,7 @@ export default function SettingsLocationPage() {
                     Loading locations...
                   </td>
                 </tr>
-              ) : filteredLocations.length === 0 ? (
+              ) : sortedFilteredLocations.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">
                     No locations found.
@@ -304,7 +336,16 @@ export default function SettingsLocationPage() {
               ) : (
                 paginatedLocations.map((location) => (
                   <tr key={location.id} className="border-t">
-                    <td className="px-4 py-3 text-sm text-gray-700">{location.shop_name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      <div className="flex items-center gap-2">
+                        <span>{location.shop_name}</span>
+                        {isFixedLocation(location) ? (
+                          <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                            Fixed
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{location.address}</td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-800">
                       {formatCurrency(location.expense_value_total)}
@@ -316,15 +357,17 @@ export default function SettingsLocationPage() {
                           onClick={() => openEditModal(location)}
                           className="rounded-md border border-blue-600 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
                         >
-                          Edit
+                          {isFixedLocation(location) ? 'Edit Address' : 'Edit'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteLocationId(location.id)}
-                          className="rounded-md border border-red-600 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
+                        {isFixedLocation(location) ? null : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteLocationId(location.id)}
+                            className="rounded-md border border-red-600 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -340,12 +383,15 @@ export default function SettingsLocationPage() {
           <div className="rounded-lg bg-white px-4 py-6 text-center text-sm text-gray-500 shadow">
             Loading locations...
           </div>
-        ) : filteredLocations.length === 0 ? (
+        ) : sortedFilteredLocations.length === 0 ? (
           <div className="rounded-lg bg-white px-4 py-6 text-center text-sm text-gray-500 shadow">
             No locations found.
           </div>
         ) : (
-          paginatedLocations.map((location) => (
+          paginatedLocations.map((location) => {
+            const locationIsFixed = isFixedLocation(location)
+
+            return (
             <div
               key={location.id}
               role="button"
@@ -365,7 +411,14 @@ export default function SettingsLocationPage() {
             >
               <div className="flex min-h-[40px] items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="text-base font-semibold text-gray-800">{location.shop_name}</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-gray-800">{location.shop_name}</h3>
+                    {locationIsFixed ? (
+                      <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                        Fixed
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-xs font-semibold text-gray-700">
                     Value: {formatCurrency(location.expense_value_total)}
                   </p>
@@ -393,29 +446,32 @@ export default function SettingsLocationPage() {
                         }}
                         className="block w-full px-3 py-2 text-left text-sm text-blue-600 hover:bg-blue-50"
                       >
-                        Edit
+                        {locationIsFixed ? 'Edit Address' : 'Edit'}
                       </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setDeleteLocationId(location.id)
-                          setOpenActionMenuId(null)
-                        }}
-                        className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
+                      {locationIsFixed ? null : (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setDeleteLocationId(location.id)
+                            setOpenActionMenuId(null)
+                          }}
+                          className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   ) : null}
                 </div>
               </div>
             </div>
-          ))
+            )
+          })
         )}
       </div>
 
-      {!isLoading && filteredLocations.length > 0 ? (
+      {!isLoading && sortedFilteredLocations.length > 0 ? (
         <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2">
           <p className="text-xs text-gray-600 sm:text-sm">
             Page {currentPage} of {totalPages}
@@ -446,7 +502,11 @@ export default function SettingsLocationPage() {
           <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">
-                {editingLocationId !== null ? 'Edit Location' : 'Add Location'}
+                {editingLocationId !== null
+                  ? isEditingFixedLocation
+                    ? 'Edit Head Office Address'
+                    : 'Edit Location'
+                  : 'Add Location'}
               </h2>
               <button
                 type="button"
@@ -469,12 +529,20 @@ export default function SettingsLocationPage() {
                   value={shopName}
                   onChange={(event) => setShopName(event.target.value)}
                   placeholder="Enter shop name"
-                  className={`w-full rounded-md bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-1 ${
+                  readOnly={isEditingFixedLocation}
+                  className={`w-full rounded-md px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-1 ${
+                    isEditingFixedLocation ? 'cursor-not-allowed border border-gray-200 bg-gray-100' : 'bg-white'
+                  } ${
                     isShopNameInvalid
                       ? 'border border-red-500 focus:border-red-500 focus:ring-red-500'
                       : 'border border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                   }`}
                 />
+                {isEditingFixedLocation ? (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {HEAD_OFFICE_SHOP_NAME} is a fixed location. Only the address can be updated.
+                  </p>
+                ) : null}
                 {isShopNameInvalid ? (
                   <p className="mt-1 text-xs font-medium text-red-600">Shop Name is required.</p>
                 ) : null}
@@ -575,7 +643,14 @@ export default function SettingsLocationPage() {
             <div className="space-y-4 px-4 py-4 md:px-5 md:py-5">
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Shop Name</p>
-                <p className="mt-1 text-base font-semibold text-gray-900">{selectedLocation.shop_name}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-base font-semibold text-gray-900">{selectedLocation.shop_name}</p>
+                  {isFixedLocation(selectedLocation) ? (
+                    <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                      Fixed
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Address</p>
@@ -590,19 +665,21 @@ export default function SettingsLocationPage() {
                 </p>
               </div>
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={openDeleteFromDetails}
-                  className="rounded-md border border-red-600 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
-                >
-                  Delete
-                </button>
+                {isFixedLocation(selectedLocation) ? null : (
+                  <button
+                    type="button"
+                    onClick={openDeleteFromDetails}
+                    className="rounded-md border border-red-600 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={openEditFromDetails}
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                 >
-                  Edit
+                  {isFixedLocation(selectedLocation) ? 'Edit Address' : 'Edit'}
                 </button>
               </div>
             </div>

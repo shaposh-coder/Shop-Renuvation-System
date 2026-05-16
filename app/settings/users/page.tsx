@@ -23,6 +23,7 @@ interface UserRecord {
 interface LocationOption {
   id: number
   shop_name: string
+  is_fixed?: boolean
 }
 
 interface UsersPageRpcResponse {
@@ -715,7 +716,7 @@ export default function SettingsUsersPage() {
                                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                               />
                               <span>{location.shop_name}</span>
-                  </label>
+                            </label>
                           ))
                         )}
                 </div>

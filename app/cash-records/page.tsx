@@ -1677,7 +1677,7 @@ export default function CashRecordsPage() {
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
-          <div className="flex h-[min(100dvh-0.5rem,920px)] max-h-[min(100dvh-0.5rem,920px)] w-full max-w-xl min-w-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:h-auto sm:max-h-[min(92dvh,840px)] sm:rounded-xl">
+          <div className="flex w-full max-w-xl min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
             <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">
                 {editingRecordId !== null ? 'Edit Cash Record' : 'Add Cash Record'}
@@ -1927,109 +1927,109 @@ export default function CashRecordsPage() {
       ) : null}
 
       {deleteRecordId !== null ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
+            <div className="shrink-0 border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Delete Cash Record</h2>
             </div>
-            <div className="px-4 py-4 md:px-5 md:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
               <p className="text-sm text-gray-700">
                 Are you sure you want to delete this cash record? This action cannot be undone.
               </p>
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setDeleteRecordId(null)}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteConfirm}
-                  disabled={isDeleting}
-                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
+              <button
+                type="button"
+                onClick={() => setDeleteRecordId(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>
       ) : null}
 
       {approveRecordId !== null ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
+            <div className="shrink-0 border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Approve Cash Record</h2>
             </div>
-            <div className="px-4 py-4 md:px-5 md:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
               <p className="text-sm text-gray-700">
                 Are you sure you want to approve this cash record?
               </p>
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setApproveRecordId(null)}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApproveConfirm}
-                  disabled={isSaving}
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                >
-                  {isSaving ? 'Approving...' : 'Approve'}
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
+              <button
+                type="button"
+                onClick={() => setApproveRecordId(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveConfirm}
+                disabled={isSaving}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                {isSaving ? 'Approving...' : 'Approve'}
+              </button>
             </div>
           </div>
         </div>
       ) : null}
 
       {isApproveAllConfirmOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
+            <div className="shrink-0 border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Approve All Cash Records</h2>
             </div>
-            <div className="px-4 py-4 md:px-5 md:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
               <p className="text-sm text-gray-700">
                 Are you sure you want to approve all visible pending cash records?
               </p>
               <p className="mt-2 text-sm font-semibold text-emerald-700">
                 {visiblePendingApprovalCount} pending record(s) will be approved.
               </p>
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsApproveAllConfirmOpen(false)}
-                  disabled={isApprovingAll}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApproveAllVisible}
-                  disabled={isApprovingAll}
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isApprovingAll ? 'Approving...' : 'Approve All'}
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
+              <button
+                type="button"
+                onClick={() => setIsApproveAllConfirmOpen(false)}
+                disabled={isApprovingAll}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveAllVisible}
+                disabled={isApprovingAll}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isApprovingAll ? 'Approving...' : 'Approve All'}
+              </button>
             </div>
           </div>
         </div>
       ) : null}
 
       {selectedViewRecord ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-xl">
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Cash Record Details</h2>
               <button
                 type="button"
@@ -2040,7 +2040,8 @@ export default function CashRecordsPage() {
                 X
               </button>
             </div>
-            <div className="space-y-3 px-4 py-4 md:px-5 md:py-5">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
+
               {currentUserRole === 'Admin' ? (
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Name</p>
@@ -2089,19 +2090,20 @@ export default function CashRecordsPage() {
                   <p className="mt-1 text-sm text-gray-800">No attachments.</p>
                 )}
               </div>
-              <div className="flex justify-end border-t pt-4">
-                <button
-                  type="button"
-                  onClick={() => setViewRecordId(null)}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Close
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 justify-end border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-5">
+              <button
+                type="button"
+                onClick={() => setViewRecordId(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
       ) : null}
+
     </div>
   )
 }

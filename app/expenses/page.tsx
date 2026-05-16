@@ -2,9 +2,10 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { HEAD_OFFICE_SHOP_NAME, isHeadOfficeName } from '@/lib/locations'
 import { CheckCircle, ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
-type ExpenseStatus = 'Pending' | 'Approved'
+type ExpenseStatus = 'Pending' | 'Approved' | 'Rejected'
 type UserRole = 'Admin' | 'Managment' | 'Viewer'
 type AdminAccess = 'All Access' | 'Edit and Delete' | 'Approvals Only'
 
@@ -85,6 +86,39 @@ const canApproveRecord = (
   adminAccess: AdminAccess | null
 ) => role === 'Admin' && status === 'Pending' && (adminAccess === 'All Access' || adminAccess === 'Approvals Only')
 
+const canRejectRecord = canApproveRecord
+
+const isRejectedStatus = (status: string) => status.trim().toLowerCase() === 'rejected'
+
+const getExpenseStatusBadgeClass = (status: ExpenseStatus | string) => {
+  if (status === 'Approved') return 'bg-emerald-100 text-emerald-700'
+  if (isRejectedStatus(status)) return 'bg-red-600 text-white'
+  return 'bg-amber-100 text-amber-700'
+}
+
+const getRejectedRowClass = (status: ExpenseStatus | string) =>
+  isRejectedStatus(status) ? 'border-t bg-red-50 text-red-700' : 'border-t'
+
+const getExpenseRowTextClass = (
+  status: ExpenseStatus | string,
+  tone: 'default' | 'strong' | 'title' | 'muted' = 'default'
+) => {
+  if (!isRejectedStatus(status)) {
+    if (tone === 'strong') return 'text-sm font-medium text-gray-800'
+    if (tone === 'title') return 'text-sm font-semibold text-gray-900'
+    if (tone === 'muted') return 'text-xs text-gray-500'
+    return 'text-sm text-gray-700'
+  }
+
+  if (tone === 'strong') return 'text-sm font-medium text-red-800'
+  if (tone === 'title') return 'text-sm font-semibold text-red-800'
+  if (tone === 'muted') return 'text-xs text-red-600'
+  return 'text-sm text-red-700'
+}
+
+const getExpenseRowActionClass = (status: ExpenseStatus | string) =>
+  isRejectedStatus(status) ? 'rounded-md p-2 text-red-600 hover:bg-red-100' : 'rounded-md p-2 text-gray-600 hover:bg-gray-100'
+
 const canEditRecord = (
   record: ExpenseRecord,
   role: UserRole | null,
@@ -96,7 +130,7 @@ const canEditRecord = (
     return true
   }
 
-  return record.status !== 'Approved'
+  return record.status === 'Pending'
 }
 
 const canDeleteRecord = (
@@ -104,6 +138,14 @@ const canDeleteRecord = (
   role: UserRole | null,
   adminAccess: AdminAccess | null
 ) => canEditRecord(record, role, adminAccess)
+
+type ExpenseEntryMode = 'normal' | 'transfer'
+
+const canUseAdvancedExpenseForm = (role: UserRole | null, adminAccess: AdminAccess | null) =>
+  role === 'Admin' && (adminAccess === 'All Access' || adminAccess === 'Edit and Delete')
+
+const EXPENSE_SELECT_FIELDS =
+  'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, attachment_urls, locations(id, shop_name), categories(id, name)'
 
 let expensesPageCache: {
   hydrated: boolean
@@ -179,6 +221,7 @@ export default function ExpensesPage() {
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null)
   const [deleteRecordId, setDeleteRecordId] = useState<number | null>(null)
   const [approveRecordId, setApproveRecordId] = useState<number | null>(null)
+  const [rejectRecordId, setRejectRecordId] = useState<number | null>(null)
   const [viewRecordId, setViewRecordId] = useState<number | null>(null)
   const [timelineRecordId, setTimelineRecordId] = useState<number | null>(null)
   const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([])
@@ -199,6 +242,7 @@ export default function ExpensesPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [currentUserContext, setCurrentUserContext] = useState<CurrentUserContext | null>(null)
   const [currentUserEmail, setCurrentUserEmail] = useState('')
+  const [entryMode, setEntryMode] = useState<ExpenseEntryMode>('normal')
   const hasFetchedOnceRef = useRef(false)
   const filterPopoverRef = useRef<HTMLDivElement | null>(null)
   const locationDropdownRef = useRef<HTMLDivElement | null>(null)
@@ -557,6 +601,7 @@ export default function ExpensesPage() {
     setCategoryId('')
     setCategorySearchTerm('')
     setIsCategoryDropdownOpen(false)
+    setEntryMode('normal')
     setShowValidation(false)
   }
 
@@ -589,6 +634,7 @@ export default function ExpensesPage() {
     setCategoryId(record.category_id)
     setCategorySearchTerm('')
     setIsCategoryDropdownOpen(false)
+    setEntryMode('normal')
     setShowValidation(false)
     setIsModalOpen(true)
   }
@@ -782,52 +828,154 @@ export default function ExpensesPage() {
 
       await recordTimeline(editingRecordId, 'Updated').catch(() => undefined)
     } else {
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert({
+      const selectedLocation = locations.find((location) => location.id === locationId) ?? null
+      const headOfficeLocation = locations.find((location) => isHeadOfficeName(location.shop_name)) ?? null
+      const showAdvancedExpenseForm = canUseAdvancedExpenseForm(currentUserRole, currentUserAdminAccess)
+      const isTransferEntry = showAdvancedExpenseForm && entryMode === 'transfer'
+
+      if (isTransferEntry) {
+        if (!headOfficeLocation) {
+          setFormErrorMessage(
+            `${HEAD_OFFICE_SHOP_NAME} is not available. Please add it from Location settings first.`
+          )
+          setIsSaving(false)
+          return
+        }
+
+        if (!locationId || locationId === headOfficeLocation.id) {
+          setShowValidation(true)
+          setIsSaving(false)
+          return
+        }
+
+        const targetShopName = selectedLocation?.shop_name ?? 'Shop'
+        const transferBasePayload = {
           user_name: effectiveUserName,
           entry_date: entryDate,
-          narration: trimmedNarration,
-          expense_value: numericExpenseValue,
-          location_id: locationId,
           category_id: categoryId,
-          status: 'Pending',
-          attachment_urls: [],
-        })
-        .select(
-          'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, attachment_urls, locations(id, shop_name), categories(id, name)'
-        )
-        .single()
-
-      if (error) {
-        setFormErrorMessage(error.message)
-        setIsSaving(false)
-        return
-      }
-
-      try {
-        const insertedRecordId = (data as ExpenseRecord).id
-        const uploadedUrls = await uploadAttachments(insertedRecordId)
-
-        if (uploadedUrls.length > 0) {
-          const { error: attachmentUpdateError } = await supabase
-            .from('expenses')
-            .update({ attachment_urls: uploadedUrls })
-            .eq('id', insertedRecordId)
-
-          if (attachmentUpdateError) {
-            setFormErrorMessage(attachmentUpdateError.message)
-            setIsSaving(false)
-            return
-          }
+          status: 'Approved' as ExpenseStatus,
+          attachment_urls: [] as string[],
         }
-      } catch (uploadError) {
-        setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
-        setIsSaving(false)
-        return
-      }
 
-      await recordTimeline((data as ExpenseRecord).id, 'Added').catch(() => undefined)
+        const { data: headOfficeRecord, error: headOfficeError } = await supabase
+          .from('expenses')
+          .insert({
+            ...transferBasePayload,
+            location_id: headOfficeLocation.id,
+            expense_value: -numericExpenseValue,
+            narration: `Transfer to ${targetShopName}: ${trimmedNarration}`,
+          })
+          .select(EXPENSE_SELECT_FIELDS)
+          .single()
+
+        if (headOfficeError) {
+          setFormErrorMessage(headOfficeError.message)
+          setIsSaving(false)
+          return
+        }
+
+        const { data: shopRecord, error: shopError } = await supabase
+          .from('expenses')
+          .insert({
+            ...transferBasePayload,
+            location_id: locationId,
+            expense_value: numericExpenseValue,
+            narration: `Transfer from ${HEAD_OFFICE_SHOP_NAME}: ${trimmedNarration}`,
+          })
+          .select(EXPENSE_SELECT_FIELDS)
+          .single()
+
+        if (shopError) {
+          await supabase.from('expenses').delete().eq('id', (headOfficeRecord as ExpenseRecord).id)
+          setFormErrorMessage(shopError.message)
+          setIsSaving(false)
+          return
+        }
+
+        const shopRecordId = (shopRecord as ExpenseRecord).id
+
+        try {
+          const uploadedUrls = await uploadAttachments(shopRecordId)
+
+          if (uploadedUrls.length > 0) {
+            const { error: attachmentUpdateError } = await supabase
+              .from('expenses')
+              .update({ attachment_urls: uploadedUrls })
+              .eq('id', shopRecordId)
+
+            if (attachmentUpdateError) {
+              setFormErrorMessage(attachmentUpdateError.message)
+              setIsSaving(false)
+              return
+            }
+          }
+        } catch (uploadError) {
+          setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
+          setIsSaving(false)
+          return
+        }
+
+        await recordTimeline((headOfficeRecord as ExpenseRecord).id, 'Transfer', {
+          transfer_type: 'out',
+          target_shop: targetShopName,
+        }).catch(() => undefined)
+        await recordTimeline(shopRecordId, 'Transfer', {
+          transfer_type: 'in',
+          source: HEAD_OFFICE_SHOP_NAME,
+        }).catch(() => undefined)
+      } else {
+        const shouldAutoApprove =
+          showAdvancedExpenseForm &&
+          entryMode === 'normal' &&
+          isHeadOfficeName(selectedLocation?.shop_name ?? '')
+
+        const { data, error } = await supabase
+          .from('expenses')
+          .insert({
+            user_name: effectiveUserName,
+            entry_date: entryDate,
+            narration: trimmedNarration,
+            expense_value: numericExpenseValue,
+            location_id: locationId,
+            category_id: categoryId,
+            status: shouldAutoApprove ? 'Approved' : 'Pending',
+            attachment_urls: [],
+          })
+          .select(EXPENSE_SELECT_FIELDS)
+          .single()
+
+        if (error) {
+          setFormErrorMessage(error.message)
+          setIsSaving(false)
+          return
+        }
+
+        try {
+          const insertedRecordId = (data as ExpenseRecord).id
+          const uploadedUrls = await uploadAttachments(insertedRecordId)
+
+          if (uploadedUrls.length > 0) {
+            const { error: attachmentUpdateError } = await supabase
+              .from('expenses')
+              .update({ attachment_urls: uploadedUrls })
+              .eq('id', insertedRecordId)
+
+            if (attachmentUpdateError) {
+              setFormErrorMessage(attachmentUpdateError.message)
+              setIsSaving(false)
+              return
+            }
+          }
+        } catch (uploadError) {
+          setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
+          setIsSaving(false)
+          return
+        }
+
+        await recordTimeline((data as ExpenseRecord).id, shouldAutoApprove ? 'Approved' : 'Added').catch(
+          () => undefined
+        )
+      }
 
       if (currentPage !== 1) {
         setCurrentPage(1)
@@ -907,6 +1055,40 @@ export default function ExpensesPage() {
     await recordTimeline(approveRecordId, 'Approved').catch(() => undefined)
     setRecords((prev) => prev.map((record) => (record.id === approveRecordId ? (data as ExpenseRecord) : record)))
     setApproveRecordId(null)
+    setActionMenu(null)
+    setIsSaving(false)
+  }
+
+  const handleRejectConfirm = async () => {
+    if (rejectRecordId === null) return
+    const targetRecord = records.find((record) => record.id === rejectRecordId)
+    if (!targetRecord || !canRejectRecord(targetRecord.status, currentUserRole, currentUserAdminAccess)) {
+      setErrorMessage('You do not have access to reject this expense.')
+      setRejectRecordId(null)
+      return
+    }
+
+    setIsSaving(true)
+    setErrorMessage(null)
+
+    const { data, error } = await supabase
+      .from('expenses')
+      .update({ status: 'Rejected' })
+      .eq('id', rejectRecordId)
+      .select(
+        'id, user_name, entry_date, narration, expense_value, location_id, category_id, status, attachment_urls, locations(id, shop_name), categories(id, name)'
+      )
+      .single()
+
+    if (error) {
+      setErrorMessage(error.message)
+      setIsSaving(false)
+      return
+    }
+
+    await recordTimeline(rejectRecordId, 'Rejected').catch(() => undefined)
+    setRecords((prev) => prev.map((record) => (record.id === rejectRecordId ? (data as ExpenseRecord) : record)))
+    setRejectRecordId(null)
     setActionMenu(null)
     setIsSaving(false)
   }
@@ -991,7 +1173,15 @@ export default function ExpensesPage() {
   const isNarrationInvalid = showValidation && narration.trim().length === 0
   const isExpenseValueInvalid =
     showValidation && (!expenseValue || Number.isNaN(Number(expenseValue)) || Number(expenseValue) <= 0)
-  const isLocationInvalid = showValidation && !locationId
+  const showAdvancedExpenseForm = canUseAdvancedExpenseForm(currentUserRole, currentUserAdminAccess)
+  const isTransferEntryMode =
+    showAdvancedExpenseForm && editingRecordId === null && entryMode === 'transfer'
+  const selectedFormLocation = locations.find((location) => location.id === locationId) ?? null
+  const isLocationInvalid =
+    showValidation &&
+    (isTransferEntryMode
+      ? !locationId || isHeadOfficeName(selectedFormLocation?.shop_name ?? '')
+      : !locationId)
   const isCategoryInvalid = showValidation && !categoryId
   const normalizedLocationSearch = locationSearchTerm.trim().toLowerCase()
   const filteredLocationOptions =
@@ -1000,8 +1190,12 @@ export default function ExpensesPage() {
       : locations.filter((location) =>
           location.shop_name.toLowerCase().includes(normalizedLocationSearch)
         )
-  const selectedLocationLabel =
-    locations.find((location) => location.id === locationId)?.shop_name ?? 'Select location'
+  const formLocationOptions = isTransferEntryMode
+    ? filteredLocationOptions.filter((location) => !isHeadOfficeName(location.shop_name))
+    : filteredLocationOptions
+  const selectedLocationLabel = isTransferEntryMode
+    ? selectedFormLocation?.shop_name ?? 'Select shop'
+    : selectedFormLocation?.shop_name ?? 'Select location'
 
   const normalizedCategorySearch = categorySearchTerm.trim().toLowerCase()
   const filteredCategoryOptions =
@@ -1346,6 +1540,7 @@ export default function ExpensesPage() {
                     <option value="">All Status</option>
                     <option value="Pending">Pending</option>
                     <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
                   </select>
                 </div>
 
@@ -1440,39 +1635,41 @@ export default function ExpensesPage() {
                 </tr>
               ) : (
                 records.map((record) => (
-                  <tr key={record.id} className="border-t">
+                  <tr key={record.id} className={getRejectedRowClass(record.status)}>
                     {showUserColumn ? (
-                      <td className="px-4 py-3 text-sm text-gray-700">{record.user_name}</td>
+                      <td className={`px-4 py-3 ${getExpenseRowTextClass(record.status)}`}>{record.user_name}</td>
                     ) : null}
-                    <td className="px-4 py-3 text-sm text-gray-700">{formatEntryDate(record.entry_date)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700" title={record.narration}>
+                    <td className={`px-4 py-3 ${getExpenseRowTextClass(record.status)}`}>
+                      {formatEntryDate(record.entry_date)}
+                    </td>
+                    <td className={`px-4 py-3 ${getExpenseRowTextClass(record.status)}`} title={record.narration}>
                       <span className="block max-w-[220px] truncate whitespace-nowrap lg:max-w-[300px]">
                         {getShortNarration(record.narration)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-800">
+                    <td className={`px-4 py-3 ${getExpenseRowTextClass(record.status, 'strong')}`}>
                       {formatCurrency(record.expense_value)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{getLocationName(record)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{getCategoryName(record)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className={`px-4 py-3 ${getExpenseRowTextClass(record.status)}`}>
+                      {getLocationName(record)}
+                    </td>
+                    <td className={`px-4 py-3 ${getExpenseRowTextClass(record.status)}`}>
+                      {getCategoryName(record)}
+                    </td>
+                    <td className={`px-4 py-3 ${getExpenseRowTextClass(record.status)}`}>
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          record.status === 'Approved'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getExpenseStatusBadgeClass(record.status)}`}
                       >
                         {record.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className={`px-4 py-3 ${getExpenseRowTextClass(record.status)}`}>
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation()
                           const buttonRect = event.currentTarget.getBoundingClientRect()
-                          const estimatedMenuHeight = currentUserRole === 'Admin' ? 180 : 144
+                          const estimatedMenuHeight = currentUserRole === 'Admin' ? 220 : 144
                           const spaceBelow = window.innerHeight - buttonRect.bottom
                           const shouldOpenUp = spaceBelow < estimatedMenuHeight && buttonRect.top > estimatedMenuHeight
 
@@ -1487,7 +1684,7 @@ export default function ExpensesPage() {
                                 }
                           )
                         }}
-                        className="rounded-md p-2 text-gray-600 hover:bg-gray-100"
+                        className={getExpenseRowActionClass(record.status)}
                         aria-label="Open expense actions"
                       >
                         <MoreVertical className="h-5 w-5" />
@@ -1513,6 +1710,7 @@ export default function ExpensesPage() {
         ) : (
           records.map((record) => {
             const canRecordApprove = canApproveRecord(record.status, currentUserRole, currentUserAdminAccess)
+            const canRecordReject = canRejectRecord(record.status, currentUserRole, currentUserAdminAccess)
             const canRecordEdit = canEditRecord(record, currentUserRole, currentUserAdminAccess)
             const canRecordDelete = canDeleteRecord(record, currentUserRole, currentUserAdminAccess)
 
@@ -1532,38 +1730,48 @@ export default function ExpensesPage() {
                     setMobileActionMenuId(null)
                   }
                 }}
-                className="relative rounded-xl bg-white px-4 py-3 shadow"
+                className={`relative rounded-xl px-4 py-3 shadow ${
+                  isRejectedStatus(record.status)
+                    ? 'border border-red-200 bg-red-50'
+                    : 'bg-white'
+                }`}
               >
                 <div className="space-y-2 pr-10">
                   <div className="flex items-center justify-between gap-2">
                     {currentUserRole === 'Admin' ? (
-                      <p className="truncate text-sm font-semibold text-gray-900">{record.user_name}</p>
+                      <p className={`truncate ${getExpenseRowTextClass(record.status, 'title')}`}>
+                        {record.user_name}
+                      </p>
                     ) : (
-                      <p className="text-sm font-semibold text-gray-900">
+                      <p className={getExpenseRowTextClass(record.status, 'title')}>
                         {formatEntryDate(record.entry_date)}
                       </p>
                     )}
                     <span
-                      className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        record.status === 'Approved'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}
+                      className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${getExpenseStatusBadgeClass(record.status)}`}
                     >
                       {record.status}
                     </span>
                   </div>
                   {currentUserRole === 'Admin' ? (
-                    <p className="text-xs text-gray-500">{formatEntryDate(record.entry_date)}</p>
+                    <p className={getExpenseRowTextClass(record.status, 'muted')}>
+                      {formatEntryDate(record.entry_date)}
+                    </p>
                   ) : null}
-                  <p className="truncate whitespace-nowrap text-sm text-gray-700">
+                  <p className={`truncate whitespace-nowrap ${getExpenseRowTextClass(record.status)}`}>
                     {getShortNarration(record.narration)}
                   </p>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-gray-800">{formatCurrency(record.expense_value)}</p>
-                    <p className="truncate text-xs text-gray-500">{getLocationName(record)}</p>
+                    <p className={getExpenseRowTextClass(record.status, 'strong')}>
+                      {formatCurrency(record.expense_value)}
+                    </p>
+                    <p className={`truncate ${getExpenseRowTextClass(record.status, 'muted')}`}>
+                      {getLocationName(record)}
+                    </p>
                   </div>
-                  <p className="truncate text-xs text-gray-500">{getCategoryName(record)}</p>
+                  <p className={`truncate ${getExpenseRowTextClass(record.status, 'muted')}`}>
+                    {getCategoryName(record)}
+                  </p>
                 </div>
 
                 <div className="absolute right-2 top-2">
@@ -1574,7 +1782,7 @@ export default function ExpensesPage() {
                         event.stopPropagation()
                         setMobileActionMenuId((prev) => (prev === record.id ? null : record.id))
                       }}
-                      className="rounded-md p-2 text-gray-600 hover:bg-gray-100"
+                      className={getExpenseRowActionClass(record.status)}
                       aria-label="Open expense actions"
                     >
                       <MoreVertical className="h-5 w-5" />
@@ -1595,6 +1803,18 @@ export default function ExpensesPage() {
                             className="block w-full px-3 py-2 text-left text-sm text-emerald-600 hover:bg-emerald-50"
                           >
                             Approve
+                          </button>
+                        ) : null}
+                        {canRecordReject ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRejectRecordId(record.id)
+                              setMobileActionMenuId(null)
+                            }}
+                            className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                          >
+                            Reject
                           </button>
                         ) : null}
                         <button
@@ -1716,6 +1936,23 @@ export default function ExpensesPage() {
                 Approve
               </button>
             ) : null}
+            {canRejectRecord(
+              selectedActionRecord?.status ?? 'Approved',
+              currentUserRole,
+              currentUserAdminAccess
+            ) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedActionRecord) return
+                  setRejectRecordId(actionMenu.recordId)
+                  setActionMenu(null)
+                }}
+                className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              >
+                Reject
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -1835,10 +2072,14 @@ export default function ExpensesPage() {
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
-          <div className="flex h-[min(100dvh-0.5rem,920px)] max-h-[min(100dvh-0.5rem,920px)] w-full max-w-xl min-w-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:h-auto sm:max-h-[min(92dvh,840px)] sm:rounded-xl">
+          <div className="flex w-full max-w-xl min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
             <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">
-                {editingRecordId !== null ? 'Edit Expense' : 'Add Expense'}
+                {editingRecordId !== null
+                  ? 'Edit Expense'
+                  : isTransferEntryMode
+                    ? 'Add Transfer'
+                    : 'Add Expense'}
               </h2>
               <button
                 type="button"
@@ -1855,6 +2096,48 @@ export default function ExpensesPage() {
               {formErrorMessage ? (
                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {formErrorMessage}
+                </div>
+              ) : null}
+
+              {showAdvancedExpenseForm && editingRecordId === null ? (
+                <div>
+                  <p className="mb-2 block text-sm font-medium text-gray-700">Entry Type</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="radio"
+                        name="expense-entry-mode"
+                        checked={entryMode === 'normal'}
+                        onChange={() => {
+                          setEntryMode('normal')
+                          setFormErrorMessage(null)
+                        }}
+                        className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      Normal Entry
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="radio"
+                        name="expense-entry-mode"
+                        checked={entryMode === 'transfer'}
+                        onChange={() => {
+                          setEntryMode('transfer')
+                          setFormErrorMessage(null)
+                          if (selectedFormLocation && isHeadOfficeName(selectedFormLocation.shop_name)) {
+                            setLocationId('')
+                          }
+                        }}
+                        className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      Transfer
+                    </label>
+                  </div>
+                  {isTransferEntryMode ? (
+                    <p className="mt-2 text-xs text-gray-500">
+                      Amount will be deducted from {HEAD_OFFICE_SHOP_NAME} and added to the selected shop.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -2001,7 +2284,9 @@ export default function ExpensesPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <div ref={locationDropdownRef} className="relative min-w-0">
-                    <p className="mb-1 block text-sm font-medium text-gray-700">Location</p>
+                    <p className="mb-1 block text-sm font-medium text-gray-700">
+                      {isTransferEntryMode ? 'Transfer To Shop' : 'Location'}
+                    </p>
                     <button
                       type="button"
                       onClick={() => {
@@ -2027,10 +2312,12 @@ export default function ExpensesPage() {
                           placeholder="Search location..."
                           className="mb-2 w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                         />
-                        {filteredLocationOptions.length === 0 ? (
-                          <p className="px-2 py-2 text-sm text-gray-500">No location found.</p>
+                        {formLocationOptions.length === 0 ? (
+                          <p className="px-2 py-2 text-sm text-gray-500">
+                            {isTransferEntryMode ? 'No shop found.' : 'No location found.'}
+                          </p>
                         ) : (
-                          filteredLocationOptions.map((location) => (
+                          formLocationOptions.map((location) => (
                             <button
                               key={location.id}
                               type="button"
@@ -2053,7 +2340,19 @@ export default function ExpensesPage() {
                     ) : null}
 
                     {isLocationInvalid ? (
-                      <p className="mt-1 text-xs font-medium text-red-600">Location is required.</p>
+                      <p className="mt-1 text-xs font-medium text-red-600">
+                        {isTransferEntryMode
+                          ? 'Please select a shop other than Head Office.'
+                          : 'Location is required.'}
+                      </p>
+                    ) : null}
+                    {!isTransferEntryMode &&
+                    showAdvancedExpenseForm &&
+                    selectedFormLocation &&
+                    isHeadOfficeName(selectedFormLocation.shop_name) ? (
+                      <p className="mt-1 text-xs text-emerald-700">
+                        This entry will be saved as Approved for {HEAD_OFFICE_SHOP_NAME}.
+                      </p>
                     ) : null}
                   </div>
                 </div>
@@ -2128,7 +2427,13 @@ export default function ExpensesPage() {
                   disabled={isSaving}
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                 >
-                  {isSaving ? 'Saving...' : editingRecordId !== null ? 'Update Expense' : 'Save Expense'}
+                  {isSaving
+                    ? 'Saving...'
+                    : editingRecordId !== null
+                      ? 'Update Expense'
+                      : isTransferEntryMode
+                        ? 'Save Transfer'
+                        : 'Save Expense'}
                 </button>
               </div>
             </form>
@@ -2137,109 +2442,141 @@ export default function ExpensesPage() {
       ) : null}
 
       {deleteRecordId !== null ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
+            <div className="shrink-0 border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Delete Expense</h2>
             </div>
-            <div className="px-4 py-4 md:px-5 md:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
               <p className="text-sm text-gray-700">
                 Are you sure you want to delete this expense? This action cannot be undone.
               </p>
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setDeleteRecordId(null)}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteConfirm}
-                  disabled={isDeleting}
-                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
+              <button
+                type="button"
+                onClick={() => setDeleteRecordId(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {rejectRecordId !== null ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
+            <div className="shrink-0 border-b px-4 py-3 md:px-5">
+              <h2 className="text-lg font-semibold text-gray-800">Reject Expense</h2>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
+              <p className="text-sm text-gray-700">
+                Are you sure you want to reject this expense?
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
+              <button
+                type="button"
+                onClick={() => setRejectRecordId(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectConfirm}
+                disabled={isSaving}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                {isSaving ? 'Rejecting...' : 'Reject'}
+              </button>
             </div>
           </div>
         </div>
       ) : null}
 
       {approveRecordId !== null ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
+            <div className="shrink-0 border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Approve Expense</h2>
             </div>
-            <div className="px-4 py-4 md:px-5 md:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
               <p className="text-sm text-gray-700">
                 Are you sure you want to approve this expense?
               </p>
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setApproveRecordId(null)}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApproveConfirm}
-                  disabled={isSaving}
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                >
-                  {isSaving ? 'Approving...' : 'Approve'}
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
+              <button
+                type="button"
+                onClick={() => setApproveRecordId(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveConfirm}
+                disabled={isSaving}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                {isSaving ? 'Approving...' : 'Approve'}
+              </button>
             </div>
           </div>
         </div>
       ) : null}
 
       {isApproveAllConfirmOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-xl">
+            <div className="shrink-0 border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Approve All Expenses</h2>
             </div>
-            <div className="px-4 py-4 md:px-5 md:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
               <p className="text-sm text-gray-700">
                 Are you sure you want to approve all visible pending expenses?
               </p>
               <p className="mt-2 text-sm font-semibold text-emerald-700">
                 {visiblePendingApprovalCount} pending record(s) will be approved.
               </p>
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsApproveAllConfirmOpen(false)}
-                  disabled={isApprovingAll}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApproveAllVisible}
-                  disabled={isApprovingAll}
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isApprovingAll ? 'Approving...' : 'Approve All'}
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:px-5">
+              <button
+                type="button"
+                onClick={() => setIsApproveAllConfirmOpen(false)}
+                disabled={isApprovingAll}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveAllVisible}
+                disabled={isApprovingAll}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isApprovingAll ? 'Approving...' : 'Approve All'}
+              </button>
             </div>
           </div>
         </div>
       ) : null}
 
       {selectedViewRecord ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b px-4 py-3 md:px-5">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex w-full max-w-md min-w-0 max-h-[min(calc(100dvh-1rem),92dvh)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-xl">
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 md:px-5">
               <h2 className="text-lg font-semibold text-gray-800">Expense Details</h2>
               <button
                 type="button"
@@ -2250,7 +2587,8 @@ export default function ExpensesPage() {
                 X
               </button>
             </div>
-            <div className="space-y-3 px-4 py-4 md:px-5 md:py-5">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-4 py-4 md:px-5">
+
               {currentUserRole === 'Admin' ? (
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Name</p>
@@ -2282,11 +2620,7 @@ export default function ExpensesPage() {
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</p>
                 <span
-                  className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    selectedViewRecord.status === 'Approved'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-amber-100 text-amber-700'
-                  }`}
+                  className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getExpenseStatusBadgeClass(selectedViewRecord.status)}`}
                 >
                   {selectedViewRecord.status}
                 </span>
@@ -2311,19 +2645,20 @@ export default function ExpensesPage() {
                   <p className="mt-1 text-sm text-gray-800">No attachments.</p>
                 )}
               </div>
-              <div className="flex justify-end border-t pt-4">
-                <button
-                  type="button"
-                  onClick={() => setViewRecordId(null)}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Close
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 justify-end border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-5">
+              <button
+                type="button"
+                onClick={() => setViewRecordId(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
       ) : null}
+
     </div>
   )
 }
