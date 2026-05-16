@@ -37,7 +37,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false)
+  const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(true)
   const [hoveredMenuPath, setHoveredMenuPath] = useState<string | null>(null)
   const [expandedMenuPath, setExpandedMenuPath] = useState<string>('/settings')
   const [isAdminUser, setIsAdminUser] = useState(false)

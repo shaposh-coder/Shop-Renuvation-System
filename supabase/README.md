@@ -18,5 +18,5 @@ Is folder me saari SQL files ordered format me rakhi hui hain taake kisi bhi nay
 ## Notes
 
 - Files idempotent style me likhi gayi hain (`if not exists`, `drop ... if exists`) taake rerun safe rahe.
-- Future DB changes ke liye nayi numbered file add karein:
-- `004_*.sql`, `005_*.sql`, etc.
+- Saari migrations in teen files me merge hain (pehle `004`–`013` alag thi).
+- Naye DB changes ke liye inhi files me update karein ya nayi migration strategy adopt karein.

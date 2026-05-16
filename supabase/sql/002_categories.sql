@@ -1,5 +1,7 @@
 -- =====================================================
--- CATEGORIES SETUP
+-- 002: CATEGORIES (run second)
+-- Table, RLS, and seed data only.
+-- Category RPCs that join expenses are in 003.
 -- =====================================================
 
 create table if not exists public.categories (
@@ -50,32 +52,6 @@ on public.categories
 for delete
 to anon, authenticated
 using (true);
-
-create or replace function public.get_categories_page_data()
-returns jsonb
-language sql
-stable
-as $$
-  select jsonb_build_object(
-    'categories',
-    coalesce(
-      (
-        select jsonb_agg(
-          jsonb_build_object(
-            'id', c.id,
-            'name', c.name,
-            'description', c.description
-          )
-          order by c.id desc
-        )
-        from public.categories c
-      ),
-      '[]'::jsonb
-    )
-  );
-$$;
-
-grant execute on function public.get_categories_page_data() to anon, authenticated;
 
 -- Seed categories (safe rerun, skips existing)
 insert into public.categories (name, description)
@@ -170,3 +146,5 @@ where not exists (
   from public.categories c
   where lower(trim(c.name)) = lower(trim(v.name))
 );
+
+select pg_notify('pgrst', 'reload schema');
