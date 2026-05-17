@@ -86,7 +86,14 @@ const canApproveRecord = (
   adminAccess: AdminAccess | null
 ) => role === 'Admin' && status === 'Pending' && (adminAccess === 'All Access' || adminAccess === 'Approvals Only')
 
-const canRejectRecord = canApproveRecord
+const canRejectRecord = (
+  status: ExpenseStatus,
+  role: UserRole | null,
+  adminAccess: AdminAccess | null
+) =>
+  role === 'Admin' &&
+  status === 'Pending' &&
+  (adminAccess === 'All Access' || adminAccess === 'Approvals Only' || adminAccess === 'Edit and Delete')
 
 const isRejectedStatus = (status: string) => status.trim().toLowerCase() === 'rejected'
 
