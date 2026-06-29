@@ -180,7 +180,6 @@ export default function DashboardPage() {
         return
       }
 
-      // Independent summary: only approved cash - approved expenses, no date/user filter impact.
       const { data, error } = await supabase.rpc('get_cash_in_hand_value', {
         p_user_email: currentEmail,
       })
@@ -198,7 +197,20 @@ export default function DashboardPage() {
       setIsFixedNetLoading(false)
     }
 
+    const handleRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        fetchFixedNetCash()
+      }
+    }
+
     fetchFixedNetCash()
+    window.addEventListener('focus', fetchFixedNetCash)
+    document.addEventListener('visibilitychange', handleRefresh)
+
+    return () => {
+      window.removeEventListener('focus', fetchFixedNetCash)
+      document.removeEventListener('visibilitychange', handleRefresh)
+    }
   }, [])
 
   useEffect(() => {
@@ -245,7 +257,20 @@ export default function DashboardPage() {
       setIsCashByUserLoading(false)
     }
 
+    const handleRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        fetchCashByUser()
+      }
+    }
+
     fetchCashByUser()
+    window.addEventListener('focus', fetchCashByUser)
+    document.addEventListener('visibilitychange', handleRefresh)
+
+    return () => {
+      window.removeEventListener('focus', fetchCashByUser)
+      document.removeEventListener('visibilitychange', handleRefresh)
+    }
   }, [])
 
   return (

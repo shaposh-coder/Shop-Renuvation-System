@@ -26,6 +26,8 @@ create table if not exists public.users (
   status text not null default 'Active',
   role text not null default 'Viewer',
   admin_access text,
+  dashboard_include_approved_cash boolean not null default true,
+  dashboard_include_pending_cash boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint users_name_not_empty check (char_length(trim(user_name)) > 0),

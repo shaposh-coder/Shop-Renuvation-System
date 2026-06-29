@@ -9,7 +9,30 @@ interface UserProfile {
   user_email: string
   role: string
   status: string
+  dashboard_include_approved_cash: boolean
+  dashboard_include_pending_cash: boolean
 }
+
+type CashCalcSettingKey = 'dashboard_include_approved_cash' | 'dashboard_include_pending_cash'
+
+interface CashCalcSettingRow {
+  key: CashCalcSettingKey
+  label: string
+  description: string
+}
+
+const CASH_CALC_SETTINGS: CashCalcSettingRow[] = [
+  {
+    key: 'dashboard_include_approved_cash',
+    label: 'Approved Cash Values',
+    description: 'Include approved cash records in Dashboard Cash Value.',
+  },
+  {
+    key: 'dashboard_include_pending_cash',
+    label: 'Pending Cash Values',
+    description: 'Include pending cash records in Dashboard Cash Value.',
+  },
+]
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -22,6 +45,7 @@ export default function SettingsPage() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [savingCashCalcKey, setSavingCashCalcKey] = useState<CashCalcSettingKey | null>(null)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -47,7 +71,9 @@ export default function SettingsPage() {
 
       const { data, error } = await supabase
         .from('users')
-        .select('user_name, user_email, role, status')
+        .select(
+          'user_name, user_email, role, status, dashboard_include_approved_cash, dashboard_include_pending_cash'
+        )
         .eq('user_email', resolvedEmail)
         .maybeSingle()
 
@@ -63,7 +89,11 @@ export default function SettingsPage() {
         return
       }
 
-      setProfile(data)
+      setProfile({
+        ...data,
+        dashboard_include_approved_cash: data.dashboard_include_approved_cash ?? true,
+        dashboard_include_pending_cash: data.dashboard_include_pending_cash ?? false,
+      })
       setEditName(data.user_name)
       setIsLoading(false)
     }
@@ -150,6 +180,30 @@ export default function SettingsPage() {
     setIsUpdatingPassword(false)
   }
 
+  const handleCashCalcSettingChange = async (key: CashCalcSettingKey, allowed: boolean) => {
+    if (!currentEmail || !profile) return
+    if (profile[key] === allowed) return
+
+    setErrorMessage(null)
+    setSuccessMessage(null)
+    setSavingCashCalcKey(key)
+
+    const { error } = await supabase
+      .from('users')
+      .update({ [key]: allowed })
+      .eq('user_email', currentEmail)
+
+    if (error) {
+      setErrorMessage(error.message)
+      setSavingCashCalcKey(null)
+      return
+    }
+
+    setProfile((prev) => (prev ? { ...prev, [key]: allowed } : prev))
+    setSuccessMessage('Dashboard cash calculation settings updated.')
+    setSavingCashCalcKey(null)
+  }
+
   return (
     <div className="p-4 md:p-8">
       <h1 className="mb-6 text-2xl font-bold text-gray-800">User Profile Setting</h1>
@@ -166,7 +220,8 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      <div className="max-w-2xl rounded-lg bg-white shadow">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="rounded-lg bg-white shadow">
         {isLoading ? (
           <div className="px-4 py-6 text-sm text-gray-500 md:px-6">Loading profile...</div>
         ) : profile ? (
@@ -236,6 +291,78 @@ export default function SettingsPage() {
             </form>
           </div>
         ) : null}
+        </div>
+
+        <div className="rounded-lg bg-white shadow">
+          <div className="border-b px-4 py-4 md:px-6">
+            <h2 className="text-sm font-semibold text-gray-800">Dashboard Cash Calculation</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Choose which cash values are included in the main Dashboard card Cash Value.
+            </p>
+          </div>
+
+          {isLoading ? (
+            <div className="px-4 py-6 text-sm text-gray-500 md:px-6">Loading settings...</div>
+          ) : profile ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 font-semibold text-gray-700 md:px-6">
+                      Cash Value Type
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-semibold text-gray-700 md:px-6">
+                      Dashboard Calculation
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {CASH_CALC_SETTINGS.map((setting) => {
+                    const isAllowed = profile[setting.key]
+                    const isSaving = savingCashCalcKey === setting.key
+
+                    return (
+                      <tr key={setting.key}>
+                        <td className="px-4 py-4 md:px-6">
+                          <p className="font-medium text-gray-900">{setting.label}</p>
+                          <p className="mt-1 text-xs text-gray-500">{setting.description}</p>
+                        </td>
+                        <td className="px-4 py-4 md:px-6">
+                          <div className="inline-flex rounded-md border border-gray-300 bg-white p-0.5">
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => handleCashCalcSettingChange(setting.key, true)}
+                              className={`rounded px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                isAllowed
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              {isSaving && isAllowed ? 'Saving...' : 'Allow'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => handleCashCalcSettingChange(setting.key, false)}
+                              className={`rounded px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                !isAllowed
+                                  ? 'bg-gray-700 text-white'
+                                  : 'text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              {isSaving && !isAllowed ? 'Saving...' : 'Not Allow'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )
