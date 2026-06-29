@@ -514,7 +514,7 @@ export default function DashboardPage() {
         <div className="border-b border-gray-100 px-3 py-4 sm:px-4 md:px-6">
           <h2 className="text-base font-semibold text-gray-900 sm:text-lg">Cash in hand by user</h2>
           <p className="mt-1 text-xs leading-relaxed text-gray-500 sm:text-sm">
-            Same figures as the Cash in Hand of All Users.
+            Same calculation as the Cash in Hand card, using your profile Allow / Not Allow settings.
           </p>
         </div>
 

@@ -88,6 +88,8 @@ as $$
 declare
   v_viewer_role text;
   v_viewer_name text;
+  v_viewer_include_approved_cash boolean;
+  v_viewer_include_pending_cash boolean;
   r record;
   v_row jsonb;
   v_out jsonb := '[]'::jsonb;
@@ -98,11 +100,13 @@ declare
   v_pending_expenses numeric;
   v_cash_value numeric;
   v_net numeric;
-  v_include_approved_cash boolean;
-  v_include_pending_cash boolean;
 begin
-  select u.role, trim(u.user_name)
-  into v_viewer_role, v_viewer_name
+  select
+    u.role,
+    trim(u.user_name),
+    coalesce(u.dashboard_include_approved_cash, true),
+    coalesce(u.dashboard_include_pending_cash, false)
+  into v_viewer_role, v_viewer_name, v_viewer_include_approved_cash, v_viewer_include_pending_cash
   from public.users u
   where lower(trim(u.user_email)) = lower(trim(p_viewer_email))
   limit 1;
@@ -112,10 +116,7 @@ begin
   end if;
 
   for r in
-    select
-      trim(u.user_name) as user_name,
-      coalesce(u.dashboard_include_approved_cash, true) as include_approved_cash,
-      coalesce(u.dashboard_include_pending_cash, false) as include_pending_cash
+    select trim(u.user_name) as user_name
     from public.users u
     where u.status = 'Active'
       and not (
@@ -128,9 +129,6 @@ begin
       continue;
     end if;
 
-    v_include_approved_cash := r.include_approved_cash;
-    v_include_pending_cash := r.include_pending_cash;
-
     select coalesce(sum(cr.cash_value), 0)
     into v_approved_cash
     from public.cash_records cr
@@ -142,10 +140,10 @@ begin
     where cr.status = 'Pending' and cr.user_name = r.user_name;
 
     v_cash_total := 0;
-    if v_include_approved_cash then
+    if v_viewer_include_approved_cash then
       v_cash_total := v_cash_total + v_approved_cash;
     end if;
-    if v_include_pending_cash then
+    if v_viewer_include_pending_cash then
       v_cash_total := v_cash_total + v_pending_cash;
     end if;
 
