@@ -7,10 +7,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "backup:supabase": "node scripts/supabase_rest_backup.mjs",
+    "backup:supabase:schema": "node scripts/supabase_rest_backup.mjs --schema-only",
+    "download:attachments": "node scripts/download_attachment_urls.mjs",
+    "migrate:cloudinary": "node scripts/migrate_attachments_to_cloudinary.mjs",
+    "remap:sql-urls": "node scripts/remap_sql_attachment_urls.mjs",
+    "import:new-supabase": "node scripts/import_to_new_supabase.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "cloudinary": "^2.10.0",
     "js-sha256": "^0.11.1",
     "lucide-react": "^0.303.0",
     "next": "^14.0.4",

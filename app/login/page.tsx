@@ -33,11 +33,21 @@ export default function LoginPage() {
     const { data, error } = await supabase
       .from('users')
       .select('id, user_name, user_email, status, role')
-      .eq('user_email', trimmedEmail)
+      .ilike('user_email', trimmedEmail)
       .eq('user_password', hashedPassword)
-      .single()
+      .maybeSingle()
 
-    if (error || !data) {
+    if (error) {
+      setErrorMessage(
+        error.message?.includes('JWT') || error.message?.includes('Invalid API key')
+          ? 'Supabase connection failed. Check API key in .env.local.'
+          : `Login failed: ${error.message}`
+      )
+      setIsLoading(false)
+      return
+    }
+
+    if (!data) {
       setErrorMessage('Invalid login details.')
       setIsLoading(false)
       return

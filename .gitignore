@@ -28,6 +28,10 @@ yarn-error.log*
 .env*.local
 .env
 
+# local dumps / secrets / large media (do not push)
+/backups/
+/sql table download menual/
+
 # vercel
 .vercel
 

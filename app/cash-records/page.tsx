@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { uploadAttachmentToCloudinary } from '@/lib/cloudinary-upload'
 import { CheckCircle, ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
 type CashRecordStatus = 'Pending' | 'Approved'
@@ -618,21 +619,8 @@ export default function CashRecordsPage() {
       const uploadedUrls: string[] = []
 
       for (const file of selectedFiles) {
-        const extension = file.name.includes('.') ? file.name.split('.').pop() : ''
-        const filePath = `cash-records/${recordId}/${Date.now()}-${Math.random().toString(36).slice(2)}${
-          extension ? `.${extension}` : ''
-        }`
-
-        const { error: uploadError } = await supabase.storage
-          .from('rms-entry-attachments')
-          .upload(filePath, file)
-
-        if (uploadError) {
-          throw new Error(uploadError.message)
-        }
-
-        const { data } = supabase.storage.from('rms-entry-attachments').getPublicUrl(filePath)
-        uploadedUrls.push(data.publicUrl)
+        const url = await uploadAttachmentToCloudinary(file, `cash-records/${recordId}`)
+        uploadedUrls.push(url)
       }
 
       return uploadedUrls

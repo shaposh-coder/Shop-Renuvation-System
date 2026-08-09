@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { uploadAttachmentToCloudinary } from '@/lib/cloudinary-upload'
 import { HEAD_OFFICE_SHOP_NAME, isHeadOfficeName } from '@/lib/locations'
 import { CheckCircle, ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
@@ -723,21 +724,8 @@ export default function ExpensesPage() {
       const uploadedUrls: string[] = []
 
       for (const file of selectedFiles) {
-        const extension = file.name.includes('.') ? file.name.split('.').pop() : ''
-        const filePath = `expenses/${recordId}/${Date.now()}-${Math.random().toString(36).slice(2)}${
-          extension ? `.${extension}` : ''
-        }`
-
-        const { error: uploadError } = await supabase.storage
-          .from('rms-entry-attachments')
-          .upload(filePath, file)
-
-        if (uploadError) {
-          throw new Error(uploadError.message)
-        }
-
-        const { data } = supabase.storage.from('rms-entry-attachments').getPublicUrl(filePath)
-        uploadedUrls.push(data.publicUrl)
+        const url = await uploadAttachmentToCloudinary(file, `expenses/${recordId}`)
+        uploadedUrls.push(url)
       }
 
       return uploadedUrls
