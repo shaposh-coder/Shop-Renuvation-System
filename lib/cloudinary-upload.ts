@@ -25,3 +25,12 @@ export async function uploadAttachmentToCloudinary(
 
   return payload.url
 }
+
+/** Upload many files in parallel (much faster than sequential). */
+export async function uploadAttachmentsToCloudinary(
+  files: File[],
+  folder: string
+): Promise<string[]> {
+  if (files.length === 0) return []
+  return Promise.all(files.map((file) => uploadAttachmentToCloudinary(file, folder)))
+}

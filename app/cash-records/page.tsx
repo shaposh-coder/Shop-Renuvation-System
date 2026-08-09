@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { uploadAttachmentToCloudinary } from '@/lib/cloudinary-upload'
+import { uploadAttachmentsToCloudinary } from '@/lib/cloudinary-upload'
 import { CheckCircle, ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
 type CashRecordStatus = 'Pending' | 'Approved'
@@ -613,17 +613,21 @@ export default function CashRecordsPage() {
     setIsSaving(true)
     setErrorMessage(null)
 
-    const uploadAttachments = async (recordId: number) => {
-      if (selectedFiles.length === 0) return []
+    const uploadSelectedAttachments = async (folderKey: string) =>
+      uploadAttachmentsToCloudinary(selectedFiles, `cash-records/${folderKey}`)
 
-      const uploadedUrls: string[] = []
-
-      for (const file of selectedFiles) {
-        const url = await uploadAttachmentToCloudinary(file, `cash-records/${recordId}`)
-        uploadedUrls.push(url)
+    const finishSave = (refreshList: boolean) => {
+      setIsSaving(false)
+      setIsModalOpen(false)
+      setEditingRecordId(null)
+      resetForm()
+      if (refreshList) {
+        if (currentPage !== 1) {
+          setCurrentPage(1)
+        } else {
+          void refreshCurrentPage()
+        }
       }
-
-      return uploadedUrls
     }
 
     if (editingRecordId !== null) {
@@ -663,7 +667,7 @@ export default function CashRecordsPage() {
       }
 
       try {
-        const uploadedUrls = await uploadAttachments(editingRecordId)
+        const uploadedUrls = await uploadSelectedAttachments(String(editingRecordId))
         const mergedAttachmentUrls = [...existingAttachmentUrls, ...uploadedUrls]
 
         if (uploadedUrls.length > 0) {
@@ -703,65 +707,50 @@ export default function CashRecordsPage() {
         return
       }
 
-      await recordTimeline(editingRecordId, 'Updated').catch(() => undefined)
-    } else {
-      const { data, error } = await supabase
-        .from('cash_records')
-        .insert({
-          user_name: effectiveUserName,
-          entry_date: entryDate,
-          narration: trimmedNarration,
-          cash_value: numericCashValue,
-          location_id: locationId,
-          status: 'Pending',
-          attachment_urls: [],
-        })
-        .select(
-          'id, user_name, entry_date, narration, cash_value, location_id, status, attachment_urls, locations(id, shop_name)'
-        )
-        .single()
-
-      if (error) {
-        setErrorMessage(error.message)
-        setIsSaving(false)
-        return
-      }
-
-      try {
-        const insertedRecordId = (data as CashRecord).id
-        const uploadedUrls = await uploadAttachments(insertedRecordId)
-
-        if (uploadedUrls.length > 0) {
-          const { error: attachmentUpdateError } = await supabase
-            .from('cash_records')
-            .update({ attachment_urls: uploadedUrls })
-            .eq('id', insertedRecordId)
-
-          if (attachmentUpdateError) {
-            setErrorMessage(attachmentUpdateError.message)
-            setIsSaving(false)
-            return
-          }
-        }
-      } catch (uploadError) {
-        setErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
-        setIsSaving(false)
-        return
-      }
-
-      await recordTimeline((data as CashRecord).id, 'Added').catch(() => undefined)
-
-      if (currentPage !== 1) {
-        setCurrentPage(1)
-      } else {
-        await refreshCurrentPage()
-      }
+      void recordTimeline(editingRecordId, 'Updated').catch(() => undefined)
+      finishSave(false)
+      return
     }
 
-    setIsSaving(false)
-    setIsModalOpen(false)
-    setEditingRecordId(null)
-    resetForm()
+    let uploadedUrls: string[] = []
+    try {
+      if (selectedFiles.length > 0) {
+        const batchKey =
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : String(Date.now())
+        uploadedUrls = await uploadSelectedAttachments(batchKey)
+      }
+    } catch (uploadError) {
+      setErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
+      setIsSaving(false)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('cash_records')
+      .insert({
+        user_name: effectiveUserName,
+        entry_date: entryDate,
+        narration: trimmedNarration,
+        cash_value: numericCashValue,
+        location_id: locationId,
+        status: 'Pending',
+        attachment_urls: uploadedUrls,
+      })
+      .select(
+        'id, user_name, entry_date, narration, cash_value, location_id, status, attachment_urls, locations(id, shop_name)'
+      )
+      .single()
+
+    if (error) {
+      setErrorMessage(error.message)
+      setIsSaving(false)
+      return
+    }
+
+    void recordTimeline((data as CashRecord).id, 'Added').catch(() => undefined)
+    finishSave(true)
   }
 
   const handleDeleteConfirm = async () => {

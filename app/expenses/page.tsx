@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { uploadAttachmentToCloudinary } from '@/lib/cloudinary-upload'
+import { uploadAttachmentsToCloudinary } from '@/lib/cloudinary-upload'
 import { HEAD_OFFICE_SHOP_NAME, isHeadOfficeName } from '@/lib/locations'
 import { CheckCircle, ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
@@ -718,17 +718,21 @@ export default function ExpensesPage() {
     }
 
     setIsSaving(true)
-    const uploadAttachments = async (recordId: number) => {
-      if (selectedFiles.length === 0) return []
+    const uploadSelectedAttachments = async (folderKey: string) =>
+      uploadAttachmentsToCloudinary(selectedFiles, `expenses/${folderKey}`)
 
-      const uploadedUrls: string[] = []
-
-      for (const file of selectedFiles) {
-        const url = await uploadAttachmentToCloudinary(file, `expenses/${recordId}`)
-        uploadedUrls.push(url)
+    const finishSave = (refreshList: boolean) => {
+      setIsSaving(false)
+      setIsModalOpen(false)
+      setEditingRecordId(null)
+      resetForm()
+      if (refreshList) {
+        if (currentPage !== 1) {
+          setCurrentPage(1)
+        } else {
+          void refreshCurrentPage()
+        }
       }
-
-      return uploadedUrls
     }
 
     setErrorMessage(null)
@@ -781,7 +785,7 @@ export default function ExpensesPage() {
       }
 
       try {
-        const uploadedUrls = await uploadAttachments(editingRecordId)
+        const uploadedUrls = await uploadSelectedAttachments(String(editingRecordId))
         const mergedAttachmentUrls = [...existingAttachmentUrls, ...uploadedUrls]
 
         if (uploadedUrls.length > 0) {
@@ -821,8 +825,12 @@ export default function ExpensesPage() {
         return
       }
 
-      await recordTimeline(editingRecordId, 'Updated').catch(() => undefined)
-    } else {
+      void recordTimeline(editingRecordId, 'Updated').catch(() => undefined)
+      finishSave(false)
+      return
+    }
+
+    {
       const selectedLocation = locations.find((location) => location.id === locationId) ?? null
       const headOfficeLocation = locations.find((location) => isHeadOfficeName(location.shop_name)) ?? null
       const showAdvancedExpenseForm = canUseAdvancedExpenseForm(currentUserRole, currentUserAdminAccess)
@@ -844,12 +852,27 @@ export default function ExpensesPage() {
         }
 
         const targetShopName = selectedLocation?.shop_name ?? 'Shop'
+
+        let uploadedUrls: string[] = []
+        try {
+          if (selectedFiles.length > 0) {
+            const batchKey =
+              typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                ? crypto.randomUUID()
+                : String(Date.now())
+            uploadedUrls = await uploadSelectedAttachments(batchKey)
+          }
+        } catch (uploadError) {
+          setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
+          setIsSaving(false)
+          return
+        }
+
         const transferBasePayload = {
           user_name: effectiveUserName,
           entry_date: entryDate,
           category_id: categoryId,
           status: 'Approved' as ExpenseStatus,
-          attachment_urls: [] as string[],
         }
 
         const { data: headOfficeRecord, error: headOfficeError } = await supabase
@@ -859,6 +882,7 @@ export default function ExpensesPage() {
             location_id: headOfficeLocation.id,
             expense_value: -numericExpenseValue,
             narration: `Transfer to ${targetShopName}: ${trimmedNarration}`,
+            attachment_urls: [],
           })
           .select(EXPENSE_SELECT_FIELDS)
           .single()
@@ -876,6 +900,7 @@ export default function ExpensesPage() {
             location_id: locationId,
             expense_value: numericExpenseValue,
             narration: `Transfer from ${HEAD_OFFICE_SHOP_NAME}: ${trimmedNarration}`,
+            attachment_urls: uploadedUrls,
           })
           .select(EXPENSE_SELECT_FIELDS)
           .single()
@@ -889,100 +914,64 @@ export default function ExpensesPage() {
 
         const shopRecordId = (shopRecord as ExpenseRecord).id
 
-        try {
-          const uploadedUrls = await uploadAttachments(shopRecordId)
-
-          if (uploadedUrls.length > 0) {
-            const { error: attachmentUpdateError } = await supabase
-              .from('expenses')
-              .update({ attachment_urls: uploadedUrls })
-              .eq('id', shopRecordId)
-
-            if (attachmentUpdateError) {
-              setFormErrorMessage(attachmentUpdateError.message)
-              setIsSaving(false)
-              return
-            }
-          }
-        } catch (uploadError) {
-          setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
-          setIsSaving(false)
-          return
-        }
-
-        await recordTimeline((headOfficeRecord as ExpenseRecord).id, 'Transfer', {
+        void recordTimeline((headOfficeRecord as ExpenseRecord).id, 'Transfer', {
           transfer_type: 'out',
           target_shop: targetShopName,
         }).catch(() => undefined)
-        await recordTimeline(shopRecordId, 'Transfer', {
+        void recordTimeline(shopRecordId, 'Transfer', {
           transfer_type: 'in',
           source: HEAD_OFFICE_SHOP_NAME,
         }).catch(() => undefined)
-      } else {
-        const shouldAutoApprove =
-          showAdvancedExpenseForm &&
-          entryMode === 'normal' &&
-          isHeadOfficeName(selectedLocation?.shop_name ?? '')
-
-        const { data, error } = await supabase
-          .from('expenses')
-          .insert({
-            user_name: effectiveUserName,
-            entry_date: entryDate,
-            narration: trimmedNarration,
-            expense_value: numericExpenseValue,
-            location_id: locationId,
-            category_id: categoryId,
-            status: shouldAutoApprove ? 'Approved' : 'Pending',
-            attachment_urls: [],
-          })
-          .select(EXPENSE_SELECT_FIELDS)
-          .single()
-
-        if (error) {
-          setFormErrorMessage(error.message)
-          setIsSaving(false)
-          return
-        }
-
-        try {
-          const insertedRecordId = (data as ExpenseRecord).id
-          const uploadedUrls = await uploadAttachments(insertedRecordId)
-
-          if (uploadedUrls.length > 0) {
-            const { error: attachmentUpdateError } = await supabase
-              .from('expenses')
-              .update({ attachment_urls: uploadedUrls })
-              .eq('id', insertedRecordId)
-
-            if (attachmentUpdateError) {
-              setFormErrorMessage(attachmentUpdateError.message)
-              setIsSaving(false)
-              return
-            }
-          }
-        } catch (uploadError) {
-          setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
-          setIsSaving(false)
-          return
-        }
-
-        await recordTimeline((data as ExpenseRecord).id, shouldAutoApprove ? 'Approved' : 'Added').catch(
-          () => undefined
-        )
+        finishSave(true)
+        return
       }
 
-      if (currentPage !== 1) {
-        setCurrentPage(1)
-      } else {
-        await refreshCurrentPage()
+      const shouldAutoApprove =
+        showAdvancedExpenseForm &&
+        entryMode === 'normal' &&
+        isHeadOfficeName(selectedLocation?.shop_name ?? '')
+
+      let uploadedUrls: string[] = []
+      try {
+        if (selectedFiles.length > 0) {
+          const batchKey =
+            typeof crypto !== 'undefined' && 'randomUUID' in crypto
+              ? crypto.randomUUID()
+              : String(Date.now())
+          uploadedUrls = await uploadSelectedAttachments(batchKey)
+        }
+      } catch (uploadError) {
+        setFormErrorMessage(uploadError instanceof Error ? uploadError.message : 'File upload failed.')
+        setIsSaving(false)
+        return
       }
+
+      const { data, error } = await supabase
+        .from('expenses')
+        .insert({
+          user_name: effectiveUserName,
+          entry_date: entryDate,
+          narration: trimmedNarration,
+          expense_value: numericExpenseValue,
+          location_id: locationId,
+          category_id: categoryId,
+          status: shouldAutoApprove ? 'Approved' : 'Pending',
+          attachment_urls: uploadedUrls,
+        })
+        .select(EXPENSE_SELECT_FIELDS)
+        .single()
+
+      if (error) {
+        setFormErrorMessage(error.message)
+        setIsSaving(false)
+        return
+      }
+
+      void recordTimeline((data as ExpenseRecord).id, shouldAutoApprove ? 'Approved' : 'Added').catch(
+        () => undefined
+      )
+      finishSave(true)
     }
-
-    setIsSaving(false)
-    setIsModalOpen(false)
-    setEditingRecordId(null)
-    resetForm()
   }
 
   const handleDeleteConfirm = async () => {
