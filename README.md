@@ -58,6 +58,8 @@ Run SQL files in order in the Supabase SQL Editor:
 2. `supabase/sql/002_categories.sql`
 3. `supabase/sql/003_core_tables.sql`
 4. `supabase/sql/004_dashboard_cash_calc_settings.sql`
+5. `supabase/sql/005_fix_anon_rls_policies.sql` (required if login shows RLS / empty users for anon key)
+6. `supabase/sql/006_install_rpc_functions.sql` (dashboard / list page RPCs — required after table-only import)
 
 Default seed admin (from `001`):
 

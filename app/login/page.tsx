@@ -48,7 +48,18 @@ export default function LoginPage() {
     }
 
     if (!data) {
-      setErrorMessage('Invalid login details.')
+      // Distinguish empty RLS/no-access from wrong password when possible
+      const { count, error: countError } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+
+      if (!countError && (count ?? 0) === 0) {
+        setErrorMessage(
+          'Database access blocked (RLS). New Supabase project mein file run karo: supabase/sql/005_fix_anon_rls_policies.sql'
+        )
+      } else {
+        setErrorMessage('Invalid login details.')
+      }
       setIsLoading(false)
       return
     }
