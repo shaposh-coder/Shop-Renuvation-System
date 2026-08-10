@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { uploadAttachmentsToCloudinary } from '@/lib/cloudinary-upload'
+import { uploadAttachments } from '@/lib/attachment-upload'
 import { HEAD_OFFICE_SHOP_NAME, isHeadOfficeName } from '@/lib/locations'
 import { CheckCircle, ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
@@ -719,7 +719,7 @@ export default function ExpensesPage() {
 
     setIsSaving(true)
     const uploadSelectedAttachments = async (folderKey: string) =>
-      uploadAttachmentsToCloudinary(selectedFiles, `expenses/${folderKey}`)
+      uploadAttachments(selectedFiles, `expenses/${folderKey}`)
 
     const finishSave = (refreshList: boolean) => {
       setIsSaving(false)

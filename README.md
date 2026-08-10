@@ -6,7 +6,7 @@ Shop renovation operations app for cash records, expenses, locations, categories
 
 - **Frontend:** Next.js 14 (App Router), React, TypeScript, Tailwind CSS
 - **Database / API:** Supabase (Postgres + PostgREST)
-- **Attachments:** Cloudinary (cash/expense file uploads)
+- **Attachments:** Cloudflare R2 (compressed uploads; cash/expense files)
 - **Deploy:** Vercel (includes daily keepalive cron)
 
 ## Features
@@ -37,18 +37,32 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_publishable_or_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_jwt
 CRON_SECRET=your_cron_secret
 
-# Cloudinary (attachments)
-NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-CLOUDINARY_FOLDER=ml_default
+# Cloudflare R2 (attachments)
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_ACCESS_KEY_ID=your_r2_access_key_id
+R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+R2_BUCKET_NAME=your_bucket_name
+R2_PUBLIC_BASE_URL=https://pub-xxxxx.r2.dev
+R2_FOLDER_PREFIX=rms-attachments
 ```
 
 Notes:
 
 - Client uses the anon/publishable key (`lib/supabase.ts`).
-- Uploads go through `/api/upload` using Cloudinary server credentials.
+- Uploads go through `/api/upload` → compress with `sharp` → Cloudflare R2.
+- Enable **Public Development URL** (or custom domain) on the R2 bucket so links work in the browser.
 - Keep `.env` / `.env.local` out of git (already ignored).
+
+### Migrate old Cloudinary / Supabase Storage URLs → R2
+
+After R2 env vars are set:
+
+```bash
+npm run migrate:r2 -- --dry-run
+npm run migrate:r2
+```
+
+This downloads existing `attachment_urls`, compresses images (WebP ~1600px), uploads to R2, and updates Supabase rows.
 
 ### 3) Database schema
 
@@ -84,7 +98,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run backup:supabase` | Schema + data SQL backup via REST |
 | `npm run backup:supabase:schema` | Schema-only backup |
 | `npm run download:attachments` | Download attachment files from SQL/storage URLs |
-| `npm run migrate:cloudinary` | Upload local attachments to Cloudinary + write URL map |
+| `npm run migrate:r2` | Migrate Cloudinary/old URLs → R2 (compress + update Supabase) |
+| `npm run migrate:cloudinary` | Legacy: local files → Cloudinary |
 | `npm run remap:sql-urls` | Rewrite SQL dumps to Cloudinary URLs |
 | `npm run import:new-supabase` | Copy old Supabase data → new project (with Cloudinary URLs) |
 

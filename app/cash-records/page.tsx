@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { uploadAttachmentsToCloudinary } from '@/lib/cloudinary-upload'
+import { uploadAttachments } from '@/lib/attachment-upload'
 import { CheckCircle, ChevronDown, MoreVertical, SlidersHorizontal } from 'lucide-react'
 
 type CashRecordStatus = 'Pending' | 'Approved'
@@ -614,7 +614,7 @@ export default function CashRecordsPage() {
     setErrorMessage(null)
 
     const uploadSelectedAttachments = async (folderKey: string) =>
-      uploadAttachmentsToCloudinary(selectedFiles, `cash-records/${folderKey}`)
+      uploadAttachments(selectedFiles, `cash-records/${folderKey}`)
 
     const finishSave = (refreshList: boolean) => {
       setIsSaving(false)
